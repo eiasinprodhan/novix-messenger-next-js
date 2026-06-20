@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     message.reactions = message.reactions.filter((r: any) => r.user.toString() !== payload.userId);
 
     // Add new reaction
-    message.reactions.push({ user: payload.userId, emoji });
+    message.reactions.push({ user: payload.userId as any, emoji });
     await message.save();
 
     // Emit real-time
