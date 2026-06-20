@@ -90,3 +90,51 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch friends' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const payload = getUserFromRequest(request);
+    if (!payload) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const friendshipId = searchParams.get('friendshipId');
+    const otherUserId = searchParams.get('friendId');
+
+    let friendship;
+
+    if (friendshipId) {
+      friendship = await Friendship.findById(friendshipId);
+    } else if (otherUserId) {
+      friendship = await Friendship.findOne({
+        $or: [
+          { requester: payload.userId, recipient: otherUserId },
+          { requester: otherUserId, recipient: payload.userId },
+        ],
+      });
+    }
+
+    if (!friendship) {
+      return NextResponse.json({ error: 'Friendship not found' }, { status: 404 });
+    }
+
+    // Verify current user is part of this friendship
+    if (
+      friendship.requester.toString() !== payload.userId &&
+      friendship.recipient.toString() !== payload.userId
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    await Friendship.findByIdAndDelete(friendship._id);
+
+    return NextResponse.json({ success: true, message: 'Friend request/friendship removed successfully' });
+  } catch (error) {
+    console.error('Friends DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to remove friendship' }, { status: 500 });
+  }
+}
+
