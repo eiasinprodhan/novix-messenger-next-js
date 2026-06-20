@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Message from '@/models/Message';
 import { getUserFromRequest } from '@/lib/auth';
+import Group from '@/models/Group';
 
 // DELETE message (soft delete)
 export async function DELETE(
@@ -34,7 +35,9 @@ export async function DELETE(
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
-        const roomId = [message.sender.toString(), message.receiver.toString()].sort().join('_');
+        const roomId = message.group
+          ? `group:${message.group.toString()}`
+          : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
         io.to(roomId).emit('message_deleted', { messageId: id });
       }
     } catch (_) {}
@@ -62,7 +65,13 @@ export async function PATCH(
     if (!message) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
 
     // Only participants can pin
-    const isParticipant = [message.sender.toString(), message.receiver.toString()].includes(payload.userId);
+    let isParticipant = false;
+    if (message.group) {
+      const groupObj = await Group.findById(message.group);
+      isParticipant = groupObj ? groupObj.members.some((m: any) => m.user.toString() === payload.userId) : false;
+    } else {
+      isParticipant = [message.sender.toString(), message.receiver?.toString() || ''].includes(payload.userId);
+    }
     if (!isParticipant) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -75,7 +84,9 @@ export async function PATCH(
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
-        const roomId = [message.sender.toString(), message.receiver.toString()].sort().join('_');
+        const roomId = message.group
+          ? `group:${message.group.toString()}`
+          : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
         io.to(roomId).emit('message_pinned', {
           messageId: id,
           isPinned: message.isPinned,

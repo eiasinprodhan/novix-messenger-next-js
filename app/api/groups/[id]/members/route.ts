@@ -32,7 +32,7 @@ export async function POST(
     const existingIds = group.members.map((m: any) => m.user.toString());
     const newMembers = userIds
       .filter((uid: string) => !existingIds.includes(uid))
-      .map((uid: string) => ({ user: uid, role: 'member' as const }));
+      .map((uid: string) => ({ user: uid as any, role: 'member' as const, joinedAt: new Date() }));
 
     group.members.push(...newMembers);
     await group.save();

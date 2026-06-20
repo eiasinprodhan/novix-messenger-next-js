@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
-        const roomId = [message.sender.toString(), message.receiver.toString()].sort().join('_');
+        const roomId = message.group
+          ? `group:${message.group.toString()}`
+          : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
         io.to(roomId).emit('message_reaction', {
           messageId,
           reactions: message.reactions,
@@ -65,7 +67,9 @@ export async function DELETE(request: NextRequest) {
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
-        const roomId = [message.sender.toString(), message.receiver.toString()].sort().join('_');
+        const roomId = message.group
+          ? `group:${message.group.toString()}`
+          : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
         io.to(roomId).emit('message_reaction', { messageId, reactions: message.reactions });
       }
     } catch (_) {}
