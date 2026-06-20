@@ -21,9 +21,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Validate file type
+    // Validate file type — use MIME type if available, else infer from extension
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
+    const extToMime: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      gif: 'image/gif',
+    };
+    const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+    const resolvedType = allowedTypes.includes(file.type)
+      ? file.type
+      : extToMime[fileExt] ?? '';
+
+    if (!resolvedType) {
       return NextResponse.json(
         { error: 'Only JPEG, PNG, WEBP, and GIF images are allowed' },
         { status: 400 }
@@ -40,7 +52,13 @@ export async function POST(request: NextRequest) {
 
     // Create unique filename
     const timestamp = Date.now();
-    const ext = file.name.split('.').pop() || 'jpg';
+    const extMap: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const ext = extMap[resolvedType] || fileExt || 'jpg';
     const filename = `img_${timestamp}_${Math.random().toString(36).substring(7)}.${ext}`;
 
     // Ensure uploads directory exists
