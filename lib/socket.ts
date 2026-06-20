@@ -20,7 +20,14 @@ export function initSocketServer(server: NetServer) {
 
   const io = new SocketIOServer(server, {
     path: '/api/socket',
-    cors: { origin: '*', methods: ['GET', 'POST'] },
+    cors: {
+      origin: (origin, callback) => {
+        // Allow all origins in development to accommodate random local ports
+        callback(null, true);
+      },
+      methods: ['GET', 'POST'],
+      credentials: true
+    },
     allowEIO3: true,
   });
 

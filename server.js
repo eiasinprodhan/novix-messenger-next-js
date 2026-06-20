@@ -18,6 +18,12 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
+    const parsedUrl = parse(req.url, true);
+
+    if (parsedUrl.pathname.startsWith('/api/socket')) {
+      return;
+    }
+
     const origin = req.headers.origin || '*';
 
     // Strong CORS for development (Flutter web)
@@ -35,7 +41,6 @@ app.prepare().then(() => {
       return;
     }
 
-    const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl).catch((err) => {
       console.error('>>> Next handler error:', err);
       res.statusCode = 500;
