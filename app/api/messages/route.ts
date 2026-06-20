@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine initial status based on online state
-    let initialStatus = 'sent';
+    let initialStatus: 'sent' | 'delivered' | 'read' = 'sent';
     try {
       const { isUserOnline } = await import('@/lib/socket');
       if (isUserOnline(receiverId)) {
