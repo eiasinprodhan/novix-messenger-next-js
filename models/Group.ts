@@ -56,7 +56,7 @@ const GroupSchema: Schema<IGroup> = new Schema(
 );
 
 // Ensure creator is always admin
-GroupSchema.pre('save', function (next) {
+GroupSchema.pre('save', function (next: any) {
   if (this.isNew) {
     const creatorExists = this.members.some(
       (m) => m.user.toString() === this.createdBy.toString() && m.role === 'admin'
