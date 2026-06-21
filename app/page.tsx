@@ -27,7 +27,7 @@ export default function NovixHome() {
           <div className="inline-flex items-center gap-2 px-4 py-1 bg-zinc-900 rounded-full text-xs mb-4 border border-zinc-800">
             <span className="text-emerald-400">●</span> MVP v1 • Ready for Flutter
           </div>
-          
+
           <h1 className="text-6xl font-semibold tracking-tighter leading-none mb-4">
             WhatsApp UI.<br />Telegram Features.
           </h1>
@@ -109,7 +109,7 @@ export default function NovixHome() {
       </div>
 
       <footer className="border-t border-zinc-800 py-8 text-center text-xs text-zinc-500">
-        Novix Messenger MVP • Built with ❤️ on Arena.ai • All features implemented incrementally
+        Novix Messenger • All features implemented incrementally
       </footer>
     </div>
   );
