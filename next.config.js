@@ -9,6 +9,11 @@ const nextConfig = {
         port: '3000',
         pathname: '/uploads/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'novix-messenger-next-js.onrender.com',
+        pathname: '/uploads/**',
+      },
     ],
   },
   async headers() {
