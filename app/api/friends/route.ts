@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
       query = { recipient: payload.userId, status: 'pending' };
     } else if (type === 'sent') {
       query = { requester: payload.userId, status: 'pending' };
+    } else if (type === 'blocked') {
+      query = { requester: payload.userId, status: 'blocked' };
     }
 
     let friendships = await Friendship.find(query)

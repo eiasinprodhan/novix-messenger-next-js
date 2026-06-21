@@ -26,8 +26,16 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    const friendship = await Friendship.findOne({
+      $or: [
+        { requester: payload.userId, recipient: id },
+        { requester: id, recipient: payload.userId },
+      ],
+    });
+
+    return NextResponse.json({ user, friendship });
   } catch (error) {
+    console.error('Failed to fetch user:', error);
     return NextResponse.json({ error: 'Failed to fetch user' }, { status: 500 });
   }
 }
