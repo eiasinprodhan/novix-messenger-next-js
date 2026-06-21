@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
+import { getIO } from '@/lib/socket';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +46,23 @@ export async function POST(request: NextRequest) {
       recipient: recipientId,
       status: 'pending',
     });
+
+    // Fetch the requester's info to include in the socket event
+    const requester = await User.findById(payload.userId).select('name username avatar');
+
+    // Notify the recipient in real-time
+    const io = getIO();
+    if (io && requester) {
+      io.to(`user:${recipientId}`).emit('friend_request', {
+        friendshipId: friendship._id.toString(),
+        requester: {
+          _id: requester._id.toString(),
+          name: requester.name,
+          username: requester.username,
+          avatar: requester.avatar,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
