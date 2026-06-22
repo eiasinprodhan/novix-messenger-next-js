@@ -14,14 +14,15 @@ export function generateAccessToken(payload: JwtPayload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
 }
 
+// 30-day rolling refresh token
 export function generateRefreshToken(payload: JwtPayload) {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d' });
 }
 
 export function verifyAccessToken(token: string): JwtPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as JwtPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -29,7 +30,7 @@ export function verifyAccessToken(token: string): JwtPayload | null {
 export function verifyRefreshToken(token: string): JwtPayload | null {
   try {
     return jwt.verify(token, JWT_REFRESH_SECRET) as JwtPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -39,7 +40,6 @@ export function getUserFromRequest(req: NextRequest): JwtPayload | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }
-
   const token = authHeader.substring(7);
   return verifyAccessToken(token);
 }
@@ -51,4 +51,17 @@ export function requireAuth(req: NextRequest) {
     return { error: 'Unauthorized', status: 401 };
   }
   return { user };
+}
+
+// Generate a short-lived password reset token (15 min)
+export function generateResetToken(payload: { userId: string; email: string }) {
+  return jwt.sign(payload, JWT_SECRET + '_reset', { expiresIn: '15m' });
+}
+
+export function verifyResetToken(token: string): { userId: string; email: string } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET + '_reset') as { userId: string; email: string };
+  } catch {
+    return null;
+  }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { generateOTP, sendVerificationEmail } from '@/lib/mailer';
 
 function corsHeaders() {
   return {
@@ -39,8 +40,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders() });
     }
 
+    // If not verified, resend OTP and redirect to verify screen
+    if (!user.isVerified) {
+      const code = generateOTP();
+      const expires = new Date(Date.now() + 15 * 60 * 1000);
+      user.verificationCode = code;
+      user.verificationCodeExpires = expires;
+      await user.save();
+
+      try {
+        await sendVerificationEmail(user.email, code);
+      } catch (emailErr: any) {
+        console.error('>>> [LOGIN] Email resend failed:', emailErr.message);
+      }
+
+      console.log('>>> [LOGIN] User not verified — resent OTP to', user.email);
+
+      return NextResponse.json({
+        requiresVerification: true,
+        userId: user._id.toString(),
+        email: user.email,
+        message: 'Please verify your email. A new code has been sent.',
+      }, { status: 403, headers: corsHeaders() });
+    }
+
     user.isOnline = true;
     user.lastSeen = new Date();
+    user.lastActiveAt = new Date();
     await user.save();
 
     const accessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
@@ -58,9 +84,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('>>> [LOGIN] ERROR:', error);
-    return NextResponse.json({ 
-      error: 'Login failed', 
-      detail: (error?.message || 'Unknown error').substring(0, 180) 
+    return NextResponse.json({
+      error: 'Login failed',
+      detail: (error?.message || 'Unknown error').substring(0, 180)
     }, { status: 500, headers: corsHeaders() });
   }
 }

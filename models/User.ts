@@ -11,8 +11,16 @@ export interface IUser extends Document {
   isVerified: boolean;
   verificationCode?: string;
   verificationCodeExpires?: Date;
+  verificationResendAt?: Date;
+  resetPasswordCode?: string;
+  resetPasswordCodeExpires?: Date;
+  pendingEmail?: string;
+  pendingEmailCode?: string;
+  pendingEmailCodeExpires?: Date;
+  pendingEmailResendAt?: Date;
   googleId?: string;
   lastSeen: Date;
+  lastActiveAt: Date;
   isOnline: boolean;
   fcmToken?: string;
   role: 'user' | 'admin';
@@ -48,8 +56,16 @@ const UserSchema: Schema<IUser> = new Schema(
     isVerified: { type: Boolean, default: false },
     verificationCode: String,
     verificationCodeExpires: Date,
+    verificationResendAt: Date,
+    resetPasswordCode: { type: String, select: false },
+    resetPasswordCodeExpires: Date,
+    pendingEmail: String,
+    pendingEmailCode: { type: String, select: false },
+    pendingEmailCodeExpires: Date,
+    pendingEmailResendAt: Date,
     googleId: { type: String, unique: true, sparse: true },
     lastSeen: { type: Date, default: Date.now },
+    lastActiveAt: { type: Date, default: Date.now },
     isOnline: { type: Boolean, default: false },
     fcmToken: { type: String },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
@@ -60,6 +76,7 @@ const UserSchema: Schema<IUser> = new Schema(
   },
   { timestamps: true }
 );
+
 
 // ========================================================================
 // THIS IS THE CORRECT VERSION (V12 - FINAL)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { generateOTP, sendVerificationEmail } from '@/lib/mailer';
 
 function corsHeaders() {
   return {
@@ -33,32 +33,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists' }, { status: 409, headers: corsHeaders() });
     }
 
+    const code = generateOTP();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
     const user = await User.create({
       name: name.trim(),
       username: username.toLowerCase().trim(),
       email: email.toLowerCase().trim(),
       password,
-      isVerified: true,
+      isVerified: false,
+      verificationCode: code,
+      verificationCodeExpires: expires,
     });
 
-    const accessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
-    const refreshToken = generateRefreshToken({ userId: user._id.toString(), email: user.email, role: user.role });
+    // Send OTP email
+    try {
+      await sendVerificationEmail(user.email, code);
+      console.log('>>> [REGISTER] Verification email sent to', user.email);
+    } catch (emailErr: any) {
+      console.error('>>> [REGISTER] Email send failed:', emailErr.message);
+      // Don't block registration if email fails — user can resend
+    }
 
-    console.log('>>> [REGISTER] SUCCESS for', user.email);
+    console.log('>>> [REGISTER] SUCCESS for', user.email, '— awaiting verification');
 
     return NextResponse.json({
       success: true,
-      message: 'Account created',
-      user: user.toJSON(),
-      accessToken,
-      refreshToken,
+      message: 'Account created. Please check your email for a verification code.',
+      requiresVerification: true,
+      userId: user._id.toString(),
+      email: user.email,
     }, { status: 201, headers: corsHeaders() });
 
   } catch (error: any) {
     console.error('>>> [REGISTER] ERROR:', error);
-    return NextResponse.json({ 
-      error: 'Registration failed', 
-      detail: (error?.message || 'Unknown error').substring(0, 180) 
+    return NextResponse.json({
+      error: 'Registration failed',
+      detail: (error?.message || 'Unknown error').substring(0, 180)
     }, { status: 500, headers: corsHeaders() });
   }
 }

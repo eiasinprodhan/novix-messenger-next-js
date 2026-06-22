@@ -135,7 +135,131 @@ export function initSocketServer(server: NetServer) {
       });
     });
 
-    // DISCONNECT
+    // ─── CALL SIGNALING ─────────────────────────────────────────────────────
+
+    // Caller initiates a 1:1 call
+    socket.on('call_offer', (data: {
+      targetUserId: string;
+      sdp: RTCSessionDescriptionInit;
+      callerInfo: { id: string; name: string; avatar?: string };
+      callId: string;
+    }) => {
+      const callerId = socket.data.userId;
+      if (!callerId) return;
+      console.log(`📞 call_offer from ${callerId} → ${data.targetUserId}`);
+      io?.to(`user:${data.targetUserId}`).emit('incoming_call', {
+        callId: data.callId,
+        callerId,
+        sdp: data.sdp,
+        callerInfo: data.callerInfo,
+        isGroup: false,
+      });
+    });
+
+    // Caller initiates a group call
+    socket.on('group_call_offer', (data: {
+      groupId: string;
+      sdp: RTCSessionDescriptionInit;
+      callerInfo: { id: string; name: string; avatar?: string };
+      callId: string;
+      targetUserIds: string[];
+    }) => {
+      const callerId = socket.data.userId;
+      if (!callerId) return;
+      console.log(`📞 group_call_offer from ${callerId} → group:${data.groupId}`);
+      // Send incoming_call to each target member
+      data.targetUserIds.forEach((uid) => {
+        if (uid !== callerId) {
+          io?.to(`user:${uid}`).emit('incoming_call', {
+            callId: data.callId,
+            callerId,
+            groupId: data.groupId,
+            sdp: data.sdp,
+            callerInfo: data.callerInfo,
+            isGroup: true,
+          });
+        }
+      });
+    });
+
+    // Callee answers
+    socket.on('call_answer', (data: {
+      callId: string;
+      callerId: string;
+      sdp: RTCSessionDescriptionInit;
+    }) => {
+      const answererId = socket.data.userId;
+      if (!answererId) return;
+      console.log(`✅ call_answer from ${answererId} → ${data.callerId}`);
+      io?.to(`user:${data.callerId}`).emit('call_answered', {
+        callId: data.callId,
+        answererId,
+        sdp: data.sdp,
+      });
+    });
+
+    // Callee declines
+    socket.on('call_decline', (data: { callId: string; callerId: string }) => {
+      const declinerId = socket.data.userId;
+      if (!declinerId) return;
+      console.log(`❌ call_decline by ${declinerId}`);
+      io?.to(`user:${data.callerId}`).emit('call_declined', {
+        callId: data.callId,
+        declinerId,
+      });
+    });
+
+    // Either party ends call
+    socket.on('call_end', (data: { callId: string; targetUserId?: string; groupId?: string }) => {
+      const enderId = socket.data.userId;
+      if (!enderId) return;
+      console.log(`🔴 call_end by ${enderId}`);
+      if (data.targetUserId) {
+        io?.to(`user:${data.targetUserId}`).emit('call_ended', { callId: data.callId, enderId });
+      }
+      if (data.groupId) {
+        io?.to(`call:${data.callId}`).emit('call_ended', { callId: data.callId, enderId });
+      }
+    });
+
+    // ICE candidate relay
+    socket.on('ice_candidate', (data: {
+      callId: string;
+      targetUserId: string;
+      candidate: RTCIceCandidateInit;
+    }) => {
+      io?.to(`user:${data.targetUserId}`).emit('ice_candidate', {
+        callId: data.callId,
+        candidate: data.candidate,
+        fromUserId: socket.data.userId,
+      });
+    });
+
+    // Join a group call room (for ICE and audio relay)
+    socket.on('group_call_join', (data: { callId: string }) => {
+      const userId = socket.data.userId;
+      if (!userId) return;
+      socket.join(`call:${data.callId}`);
+      socket.to(`call:${data.callId}`).emit('group_call_participant_joined', {
+        callId: data.callId,
+        userId,
+      });
+      console.log(`👥 ${userId} joined call room call:${data.callId}`);
+    });
+
+    // Leave group call room
+    socket.on('group_call_leave', (data: { callId: string }) => {
+      const userId = socket.data.userId;
+      if (!userId) return;
+      socket.leave(`call:${data.callId}`);
+      socket.to(`call:${data.callId}`).emit('group_call_participant_left', {
+        callId: data.callId,
+        userId,
+      });
+      console.log(`👤 ${userId} left call room call:${data.callId}`);
+    });
+
+    // ─── DISCONNECT ──────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       const userId = socket.data.userId;
       if (userId) {
