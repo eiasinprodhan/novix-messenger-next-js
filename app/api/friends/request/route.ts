@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
 import { getIO } from '@/lib/socket';
+import { messaging } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,6 +63,27 @@ export async function POST(request: NextRequest) {
           avatar: requester.avatar,
         },
       });
+    }
+
+    // Send FCM push notification if offline
+    try {
+      const { isUserOnline } = await import('@/lib/socket');
+      if (!isUserOnline(recipientId) && recipient.fcmToken && messaging && requester) {
+        await messaging.send({
+          token: recipient.fcmToken,
+          notification: {
+            title: 'New Friend Request',
+            body: `${requester.name} sent you a friend request.`,
+          },
+          data: {
+            type: 'friend_request',
+            requesterId: payload.userId,
+          },
+        });
+        console.log(`[FCM] Friend request push notification sent to ${recipientId}`);
+      }
+    } catch (e) {
+      console.error('[FCM] Failed to send friend request push notification:', e);
     }
 
     return NextResponse.json({

@@ -14,6 +14,7 @@ export interface IUser extends Document {
   googleId?: string;
   lastSeen: Date;
   isOnline: boolean;
+  fcmToken?: string;
   role: 'user' | 'admin';
   notificationsEnabled: boolean;
   lastSeenPrivacy: 'everyone' | 'contacts' | 'nobody';
@@ -50,6 +51,7 @@ const UserSchema: Schema<IUser> = new Schema(
     googleId: { type: String, unique: true, sparse: true },
     lastSeen: { type: Date, default: Date.now },
     isOnline: { type: Boolean, default: false },
+    fcmToken: { type: String },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     notificationsEnabled: { type: Boolean, default: true },
     lastSeenPrivacy: { type: String, enum: ['everyone', 'contacts', 'nobody'], default: 'everyone' },

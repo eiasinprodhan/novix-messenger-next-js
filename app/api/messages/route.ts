@@ -3,6 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Message from '@/models/Message';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
+import User from '@/models/User';
+import { messaging } from '@/lib/firebase-admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -110,6 +112,28 @@ export async function POST(request: NextRequest) {
       const { isUserOnline } = await import('@/lib/socket');
       if (isUserOnline(receiverId)) {
         initialStatus = 'delivered';
+      } else {
+        // Receiver is offline, send FCM push notification
+        const receiverUser = await User.findById(receiverId);
+        if (receiverUser?.fcmToken && messaging) {
+          const senderUser = await User.findById(payload.userId);
+          try {
+            await messaging.send({
+              token: receiverUser.fcmToken,
+              notification: {
+                title: senderUser?.name || 'New Message',
+                body: type === 'image' ? '📷 Image' : content,
+              },
+              data: {
+                type: 'new_message',
+                senderId: payload.userId,
+              },
+            });
+            console.log(`[FCM] Push notification sent to ${receiverId}`);
+          } catch (fcmError) {
+            console.error('[FCM] Failed to send push notification:', fcmError);
+          }
+        }
       }
     } catch (e) {}
 
