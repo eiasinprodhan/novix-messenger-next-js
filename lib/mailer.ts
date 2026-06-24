@@ -22,9 +22,9 @@ function createTransport() {
       user: GMAIL_USER,
       pass: GMAIL_APP_PASSWORD,
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    connectionTimeout: 3000,
+    greetingTimeout: 3000,
+    socketTimeout: 3000,
   });
 }
 
@@ -136,6 +136,7 @@ export async function sendVerificationEmail(
   to: string,
   code: string
 ): Promise<void> {
+  console.log(`\n✉️  [MAIL] Verification OTP code for ${to} is: ${code}\n`);
   await sendMail(
     to,
     `${code} — Verify your Novix account`,
@@ -153,6 +154,7 @@ export async function sendPasswordResetEmail(
   to: string,
   code: string
 ): Promise<void> {
+  console.log(`\n✉️  [MAIL] Password Reset OTP code for ${to} is: ${code}\n`);
   await sendMail(
     to,
     `${code} — Reset your Novix password`,
@@ -170,6 +172,7 @@ export async function sendEmailChangeEmail(
   to: string,
   code: string
 ): Promise<void> {
+  console.log(`\n✉️  [MAIL] Email Change OTP code for ${to} is: ${code}\n`);
   await sendMail(
     to,
     `${code} — Confirm your new Novix email`,
