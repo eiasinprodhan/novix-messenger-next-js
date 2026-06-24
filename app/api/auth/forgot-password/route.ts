@@ -29,11 +29,8 @@ export async function POST(request: NextRequest) {
     // Always respond with success to avoid user enumeration
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+resetPasswordCode');
     if (!user) {
-      console.log('>>> [FORGOT-PASSWORD] No user found for', email, '— silently ignoring');
-      return NextResponse.json({
-        success: true,
-        message: 'If this email exists, a reset code has been sent.',
-      }, { status: 200, headers: corsHeaders() });
+      console.log('>>> [FORGOT-PASSWORD] No user found for', email);
+      return NextResponse.json({ error: 'No account found with this email address.' }, { status: 404, headers: corsHeaders() });
     }
 
     if (!user.isVerified) {
