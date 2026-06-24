@@ -3,47 +3,17 @@ import nodemailer from 'nodemailer';
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
-// Singleton transport with pooling — avoids re-connecting on every request
-let _transport: nodemailer.Transporter | null = null;
-
-function getTransport() {
-  if (!_transport) {
-    _transport = nodemailer.createTransport({
-      service: 'gmail',
-      pool: true,           // reuse SMTP connections
-      maxConnections: 3,
-      auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_APP_PASSWORD,
-      },
-      connectionTimeout: 30000, // 30 seconds — needed for Render cold-start
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
-    });
-  }
-  return _transport;
-}
-
-// Send mail with 1 automatic retry on failure
-async function sendMailWithRetry(
-  options: nodemailer.SendMailOptions,
-  retries = 1
-): Promise<void> {
-  let lastErr: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      await getTransport().sendMail(options);
-      return;
-    } catch (err) {
-      lastErr = err;
-      // Reset singleton so next attempt gets a fresh connection
-      _transport = null;
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 2000)); // wait 2s before retry
-      }
-    }
-  }
-  throw lastErr;
+function createTransport() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: GMAIL_USER,
+      pass: GMAIL_APP_PASSWORD,
+    },
+    connectionTimeout: 5000, // 5 seconds
+    greetingTimeout: 5000,   // 5 seconds
+    socketTimeout: 5000,     // 5 seconds
+  });
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
@@ -102,7 +72,8 @@ function otpEmailHtml(title: string, subtitle: string, code: string, note: strin
 }
 
 export async function sendVerificationEmail(to: string, code: string) {
-  await sendMailWithRetry({
+  const transport = createTransport();
+  await transport.sendMail({
     from: `"Novix Messenger" <${GMAIL_USER}>`,
     to,
     subject: `${code} — Verify your Novix account`,
@@ -116,7 +87,8 @@ export async function sendVerificationEmail(to: string, code: string) {
 }
 
 export async function sendPasswordResetEmail(to: string, code: string) {
-  await sendMailWithRetry({
+  const transport = createTransport();
+  await transport.sendMail({
     from: `"Novix Messenger" <${GMAIL_USER}>`,
     to,
     subject: `${code} — Reset your Novix password`,
@@ -130,7 +102,8 @@ export async function sendPasswordResetEmail(to: string, code: string) {
 }
 
 export async function sendEmailChangeEmail(to: string, code: string) {
-  await sendMailWithRetry({
+  const transport = createTransport();
+  await transport.sendMail({
     from: `"Novix Messenger" <${GMAIL_USER}>`,
     to,
     subject: `${code} — Confirm your new Novix email`,
