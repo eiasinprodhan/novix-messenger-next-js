@@ -16,6 +16,10 @@ function createTransport() {
   });
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL
+  ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '')
+  : 'https://novix-messenger-next-js.onrender.com';
+
 function otpEmailHtml(title: string, subtitle: string, code: string, note: string) {
   return `
 <!DOCTYPE html>
@@ -33,8 +37,8 @@ function otpEmailHtml(title: string, subtitle: string, code: string, note: strin
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#5EBBF5,#3A9AD9);padding:32px 40px;text-align:center;">
-              <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                <span style="font-size:32px;font-weight:800;color:#fff;line-height:64px;display:block;">N</span>
+              <div style="width:72px;height:72px;border-radius:18px;overflow:hidden;display:inline-block;margin-bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,0.25);">
+                <img src="${BASE_URL}/app_icon.png" alt="Novix Messenger" width="72" height="72" style="display:block;width:72px;height:72px;border-radius:18px;" />
               </div>
               <h1 style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">Novix Messenger</h1>
             </td>
