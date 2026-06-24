@@ -13,7 +13,7 @@ function createTransport() {
       pass: GMAIL_APP_PASSWORD,
     },
     // Force IPv4 to resolve Render's outbound mail issue (connect ENETUNREACH)
-    localAddress: '0.0.0.0',
+    family: 4,
     connectionTimeout: 30000, // 30 seconds
     greetingTimeout: 30000,   // 30 seconds
     socketTimeout: 30000,     // 30 seconds
