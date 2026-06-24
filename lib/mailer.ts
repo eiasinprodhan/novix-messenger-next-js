@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { lookup } from 'dns';
+import { promisify } from 'util';
 
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
@@ -10,31 +12,43 @@ if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
   );
 }
 
-// ✅ Explicitly typed as SMTPTransport.Options — fixes "host does not exist" TS error
-const transportOptions: SMTPTransport.Options = {
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // false = STARTTLS on port 587 (Render compatible)
-  auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_APP_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: true,
-    minVersion: 'TLSv1.2',
-  },
-  family: 4, // Force IPv4 — Render IPv6 outbound is unreliable
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000,
-};
+// ✅ Resolve smtp.gmail.com to an IPv4 address first,
+//    then pass it directly — this bypasses the IPv6 issue on Render
+//    without needing the non-typed `family: 4` property
+async function resolveIPv4(hostname: string): Promise<string> {
+  const dnsLookup = promisify(lookup);
+  const result = await dnsLookup(hostname, { family: 4 });
+  return result.address;
+}
 
-function createTransport() {
-  return nodemailer.createTransport(transportOptions);
+async function createTransport() {
+  const smtpIP = await resolveIPv4('smtp.gmail.com');
+  console.log(`[Mailer] Resolved smtp.gmail.com → ${smtpIP} (IPv4)`);
+
+  // ✅ Correctly typed — no unknown properties
+  const options: SMTPTransport.Options = {
+    host: smtpIP,        // Use resolved IPv4 directly instead of hostname
+    port: 587,
+    secure: false,       // STARTTLS on port 587
+    auth: {
+      user: GMAIL_USER,
+      pass: GMAIL_APP_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2',
+      servername: 'smtp.gmail.com', // ✅ Required when using IP — for TLS SNI/cert validation
+    },
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+  };
+
+  return nodemailer.createTransport(options);
 }
 
 export async function verifyMailTransport(): Promise<void> {
-  const transport = createTransport();
+  const transport = await createTransport();
   try {
     await transport.verify();
     console.log('[Mailer] SMTP connection verified successfully.');
@@ -118,7 +132,7 @@ async function sendMail(
     );
   }
 
-  const transport = createTransport();
+  const transport = await createTransport();
 
   try {
     console.log(`[Mailer] Sending ${label} to ${to}...`);
