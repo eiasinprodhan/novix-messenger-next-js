@@ -46,14 +46,18 @@ export async function POST(request: NextRequest) {
       verificationCodeExpires: expires,
     });
 
-    // Send OTP email (non-blocking background task)
-    sendVerificationEmail(user.email, code)
-      .then(() => {
-        console.log('>>> [REGISTER] Verification email sent to', user.email);
-      })
-      .catch((emailErr: any) => {
-        console.error('>>> [REGISTER] Email send failed:', emailErr.message);
-      });
+    try {
+      await sendVerificationEmail(user.email, code);
+      console.log('>>> [REGISTER] Verification email sent to', user.email);
+    } catch (emailErr: any) {
+      console.error('>>> [REGISTER] Email send failed:', emailErr.message);
+      // Clean up the created user since code was not sent
+      await User.deleteOne({ _id: user._id });
+      return NextResponse.json({
+        error: 'Failed to send verification email. Please check your email address and try again.',
+        detail: emailErr.message
+      }, { status: 500, headers: corsHeaders() });
+    }
 
     console.log('>>> [REGISTER] SUCCESS for', user.email, '— awaiting verification');
 
