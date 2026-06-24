@@ -44,17 +44,14 @@ export async function POST(request: NextRequest) {
     user.resetPasswordCodeExpires = expires;
     await user.save();
 
-    try {
-      await sendPasswordResetEmail(user.email, code);
-      console.log('>>> [FORGOT-PASSWORD] Reset code sent to', user.email);
-    } catch (emailErr: any) {
-      console.error('>>> [FORGOT-PASSWORD] Email failed:', emailErr.message);
-      // Clean up database state if email sending failed
-      user.resetPasswordCode = undefined;
-      user.resetPasswordCodeExpires = undefined;
-      await user.save();
-      return NextResponse.json({ error: 'Failed to send email. Please try again.' }, { status: 500, headers: corsHeaders() });
-    }
+    // Send OTP email (non-blocking background task so Render does not block/timeout)
+    sendPasswordResetEmail(user.email, code)
+      .then(() => {
+        console.log('>>> [FORGOT-PASSWORD] Reset code sent to', user.email);
+      })
+      .catch((emailErr: any) => {
+        console.error('>>> [FORGOT-PASSWORD] Email failed:', emailErr.message);
+      });
 
     return NextResponse.json({
       success: true,

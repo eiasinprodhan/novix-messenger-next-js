@@ -111,19 +111,14 @@ export async function POST(request: NextRequest) {
     user.pendingEmailResendAt = new Date();
     await user.save();
 
-    try {
-      await sendEmailChangeEmail(newEmail, otpCode);
-      console.log('>>> [CHANGE-EMAIL] OTP sent to new email', newEmail);
-    } catch (emailErr: any) {
-      console.error('>>> [CHANGE-EMAIL] Email failed:', emailErr.message);
-      // Clean up database state if email sending failed
-      user.pendingEmail = undefined;
-      user.pendingEmailCode = undefined;
-      user.pendingEmailCodeExpires = undefined;
-      user.pendingEmailResendAt = undefined;
-      await user.save();
-      return NextResponse.json({ error: 'Failed to send verification email. Please try again.' }, { status: 500, headers: corsHeaders() });
-    }
+    // Send OTP email (non-blocking background task so Render does not block/timeout)
+    sendEmailChangeEmail(newEmail, otpCode)
+      .then(() => {
+        console.log('>>> [CHANGE-EMAIL] OTP sent to new email', newEmail);
+      })
+      .catch((emailErr: any) => {
+        console.error('>>> [CHANGE-EMAIL] Email failed:', emailErr.message);
+      });
 
     return NextResponse.json({
       success: true,

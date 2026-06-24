@@ -55,14 +55,14 @@ export async function POST(request: NextRequest) {
     user.verificationResendAt = new Date();
     await user.save();
 
-    try {
-      await sendVerificationEmail(user.email, code);
-    } catch (emailErr: any) {
-      console.error('>>> [RESEND-VERIFICATION] Email failed:', emailErr.message);
-      return NextResponse.json({ error: 'Failed to send email. Please try again.' }, { status: 500, headers: corsHeaders() });
-    }
-
-    console.log('>>> [RESEND-VERIFICATION] Resent to', user.email);
+    // Send OTP email (non-blocking background task so Render does not block/timeout)
+    sendVerificationEmail(user.email, code)
+      .then(() => {
+        console.log('>>> [RESEND-VERIFICATION] Resent to', user.email);
+      })
+      .catch((emailErr: any) => {
+        console.error('>>> [RESEND-VERIFICATION] Email failed:', emailErr.message);
+      });
 
     return NextResponse.json({
       success: true,
