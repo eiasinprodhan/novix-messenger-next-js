@@ -5,11 +5,15 @@ const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
 function createTransport() {
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
       user: GMAIL_USER,
       pass: GMAIL_APP_PASSWORD,
     },
+    // Force IPv4 to resolve Render's outbound mail issue (connect ENETUNREACH)
+    localAddress: '0.0.0.0',
     connectionTimeout: 30000, // 30 seconds
     greetingTimeout: 30000,   // 30 seconds
     socketTimeout: 30000,     // 30 seconds
