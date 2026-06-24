@@ -1,32 +1,9 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
-
-// Force IPv4 resolution to prevent ETIMEDOUT issues on local environments/ISPs that do not support IPv6 SMTP
-if (typeof dns.setDefaultResultOrder === 'function') {
-  dns.setDefaultResultOrder('ipv4first');
-}
-
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 
 if (!RESEND_API_KEY) {
   console.warn(
     '[Mailer] WARNING: RESEND_API_KEY is not set. Emails will not be sent.'
   );
-}
-
-function createTransport() {
-  return nodemailer.createTransport({
-    host: 'smtp.resend.com',
-    port: 465,
-    secure: true, // true for 465, false for other ports
-    auth: {
-      user: 'resend',
-      pass: RESEND_API_KEY,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
@@ -89,7 +66,7 @@ function otpEmailHtml(
 </html>`;
 }
 
-// ✅ Single shared send function using SMTP
+// ✅ Send via Resend HTTP API — uses HTTPS port 443, never blocked on any network
 async function sendMail(
   to: string,
   subject: string,
@@ -98,39 +75,35 @@ async function sendMail(
 ): Promise<void> {
   if (!RESEND_API_KEY) {
     throw new Error(
-      `[Mailer] Cannot send ${label} — RESEND_API_KEY SMTP credentials are missing.`
+      `[Mailer] Cannot send ${label} — RESEND_API_KEY is missing.`
     );
   }
 
-  const transport = createTransport();
+  console.log(`[Mailer] Sending ${label} to ${to} via Resend API...`);
 
-  try {
-    console.log(`[Mailer] Sending ${label} to ${to} via Resend SMTP...`);
-
-    const info = await transport.sendMail({
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       from: 'Novix Messenger <onboarding@resend.dev>',
       to,
       subject,
       html,
-    });
+    }),
+  });
 
-    console.log(`[Mailer] ${label} sent successfully via SMTP.`, {
-      messageId: info.messageId,
-      accepted: info.accepted,
-      rejected: info.rejected,
-    });
-  } catch (err: unknown) {
-    console.error(`[Mailer] Failed to send ${label} to ${to} via SMTP:`, {
-      message: err instanceof Error ? err.message : String(err),
-      code: (err as Record<string, unknown>)?.code,
-      command: (err as Record<string, unknown>)?.command,
-      response: (err as Record<string, unknown>)?.response,
-      responseCode: (err as Record<string, unknown>)?.responseCode,
-    });
-    throw err;
-  } finally {
-    transport.close(); // ✅ Always release connection
+  const data = await response.json() as { id?: string; message?: string; name?: string };
+
+  if (!response.ok) {
+    const errMsg = data?.message || `Resend API error: HTTP ${response.status}`;
+    console.error(`[Mailer] Failed to send ${label} to ${to}:`, data);
+    throw new Error(errMsg);
   }
+
+  console.log(`[Mailer] ${label} sent successfully via Resend API.`, { id: data.id });
 }
 
 export async function sendVerificationEmail(
