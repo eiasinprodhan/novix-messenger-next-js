@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "NODE_ENV=production tsx server.js",
     "lint": "eslint",
-    "seed": "tsx scripts/seed-demo-user.ts"
+    "seed": "tsx scripts/seed-demo-user.ts",
+    "db:clear": "tsx scripts/clear-db.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.1",
