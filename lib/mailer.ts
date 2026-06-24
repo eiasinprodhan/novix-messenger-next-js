@@ -11,18 +11,15 @@ if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
 
 function createTransport() {
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    service: 'gmail', // ✅ This is the key — let Nodemailer handle Gmail config
     auth: {
       user: GMAIL_USER,
       pass: GMAIL_APP_PASSWORD,
     },
-    family: 4,
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 20000,
-  } as any);
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+  });
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
@@ -51,8 +48,8 @@ function otpEmailHtml(
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#5EBBF5,#3A9AD9);padding:32px 40px;text-align:center;">
-              <div style="width:72px;height:72px;border-radius:18px;overflow:hidden;display:inline-block;margin-bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,0.25);">
-                <img src="${BASE_URL}/app_icon.png" alt="Novix Messenger" width="72" height="72" style="display:block;width:72px;height:72px;border-radius:18px;" />
+              <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                <span style="font-size:32px;font-weight:800;color:#fff;line-height:64px;display:block;">N</span>
               </div>
               <h1 style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">Novix Messenger</h1>
             </td>
@@ -85,6 +82,7 @@ function otpEmailHtml(
 </html>`;
 }
 
+// ✅ Single shared send function with logging
 async function sendMail(
   to: string,
   subject: string,
@@ -93,7 +91,7 @@ async function sendMail(
 ): Promise<void> {
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     throw new Error(
-      `[Mailer] Cannot send ${label} — GMAIL_USER or GMAIL_APP_PASSWORD env var is missing.`
+      `[Mailer] Cannot send ${label} — GMAIL_USER or GMAIL_APP_PASSWORD is missing.`
     );
   }
 
@@ -117,7 +115,6 @@ async function sendMail(
   } catch (err: unknown) {
     console.error(`[Mailer] Failed to send ${label} to ${to}:`, {
       message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
       code: (err as Record<string, unknown>)?.code,
       command: (err as Record<string, unknown>)?.command,
       response: (err as Record<string, unknown>)?.response,
@@ -125,7 +122,7 @@ async function sendMail(
     });
     throw err;
   } finally {
-    transport.close();
+    transport.close(); // ✅ Always release connection
   }
 }
 
