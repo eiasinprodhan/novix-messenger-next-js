@@ -6,25 +6,26 @@ if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const GMAIL_USER = process.env.GMAIL_USER || '';
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 
-if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+if (!RESEND_API_KEY) {
   console.warn(
-    '[Mailer] WARNING: GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will not be sent.'
+    '[Mailer] WARNING: RESEND_API_KEY is not set. Emails will not be sent.'
   );
 }
 
 function createTransport() {
   return nodemailer.createTransport({
-    service: 'gmail', // ✅ This is the key — let Nodemailer handle Gmail config
+    host: 'smtp.resend.com',
+    port: 465,
+    secure: true, // true for 465, false for other ports
     auth: {
-      user: GMAIL_USER,
-      pass: GMAIL_APP_PASSWORD,
+      user: 'resend',
+      pass: RESEND_API_KEY,
     },
-    connectionTimeout: 3000,
-    greetingTimeout: 3000,
-    socketTimeout: 3000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 }
 
@@ -88,38 +89,38 @@ function otpEmailHtml(
 </html>`;
 }
 
-// ✅ Single shared send function with logging
+// ✅ Single shared send function using SMTP
 async function sendMail(
   to: string,
   subject: string,
   html: string,
   label: string
 ): Promise<void> {
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+  if (!RESEND_API_KEY) {
     throw new Error(
-      `[Mailer] Cannot send ${label} — GMAIL_USER or GMAIL_APP_PASSWORD is missing.`
+      `[Mailer] Cannot send ${label} — RESEND_API_KEY SMTP credentials are missing.`
     );
   }
 
   const transport = createTransport();
 
   try {
-    console.log(`[Mailer] Sending ${label} to ${to}...`);
+    console.log(`[Mailer] Sending ${label} to ${to} via Resend SMTP...`);
 
     const info = await transport.sendMail({
-      from: `"Novix Messenger" <${GMAIL_USER}>`,
+      from: 'Novix Messenger <onboarding@resend.dev>',
       to,
       subject,
       html,
     });
 
-    console.log(`[Mailer] ${label} sent successfully.`, {
+    console.log(`[Mailer] ${label} sent successfully via SMTP.`, {
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,
     });
   } catch (err: unknown) {
-    console.error(`[Mailer] Failed to send ${label} to ${to}:`, {
+    console.error(`[Mailer] Failed to send ${label} to ${to} via SMTP:`, {
       message: err instanceof Error ? err.message : String(err),
       code: (err as Record<string, unknown>)?.code,
       command: (err as Record<string, unknown>)?.command,
