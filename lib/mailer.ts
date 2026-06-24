@@ -3,28 +3,56 @@ import nodemailer from 'nodemailer';
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
+if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+  console.warn(
+    '[Mailer] WARNING: GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will not be sent.'
+  );
+}
+
 function createTransport() {
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port: 587,          // ✅ Use 587 (STARTTLS) — Render often blocks 465
+    secure: false,      // ✅ false for port 587 (STARTTLS upgrades the connection)
     auth: {
       user: GMAIL_USER,
       pass: GMAIL_APP_PASSWORD,
     },
-    // Force IPv4 to resolve Render's outbound mail issue (connect ENETUNREACH)
+    tls: {
+      rejectUnauthorized: true,   // ✅ Enforce valid certs
+      minVersion: 'TLSv1.2',      // ✅ Modern TLS only
+    },
+    // Force IPv4 — Render's IPv6 outbound is unreliable
     family: 4,
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 30000,   // 30 seconds
-    socketTimeout: 30000,     // 30 seconds
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
   });
+}
+
+// ✅ Verify transport connection once at startup (helps catch config errors early)
+export async function verifyMailTransport(): Promise<void> {
+  const transport = createTransport();
+  try {
+    await transport.verify();
+    console.log('[Mailer] SMTP connection verified successfully.');
+  } catch (err) {
+    console.error('[Mailer] SMTP connection verification FAILED:', err);
+  } finally {
+    transport.close();
+  }
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
   ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '')
   : 'https://novix-messenger-next-js.onrender.com';
 
-function otpEmailHtml(title: string, subtitle: string, code: string, note: string) {
+function otpEmailHtml(
+  title: string,
+  subtitle: string,
+  code: string,
+  note: string
+) {
   return `
 <!DOCTYPE html>
 <html>
@@ -75,49 +103,103 @@ function otpEmailHtml(title: string, subtitle: string, code: string, note: strin
 </html>`;
 }
 
-export async function sendVerificationEmail(to: string, code: string) {
+// ✅ Shared send helper with logging and guaranteed cleanup
+async function sendMail(
+  to: string,
+  subject: string,
+  html: string,
+  label: string
+): Promise<void> {
+  // Guard: don't even try if credentials are missing
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    throw new Error(
+      `[Mailer] Cannot send ${label} — GMAIL_USER or GMAIL_APP_PASSWORD env var is missing.`
+    );
+  }
+
   const transport = createTransport();
-  await transport.sendMail({
-    from: `"Novix Messenger" <${GMAIL_USER}>`,
+
+  try {
+    console.log(`[Mailer] Sending ${label} to ${to}...`);
+
+    const info = await transport.sendMail({
+      from: `"Novix Messenger" <${GMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log(`[Mailer] ${label} sent successfully.`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+  } catch (err: unknown) {
+    // ✅ Detailed error logging so you can debug on Render logs
+    console.error(`[Mailer] Failed to send ${label} to ${to}:`, {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      code: (err as Record<string, unknown>)?.code,
+      command: (err as Record<string, unknown>)?.command,
+      response: (err as Record<string, unknown>)?.response,
+      responseCode: (err as Record<string, unknown>)?.responseCode,
+    });
+
+    throw err; // Re-throw so the caller (API route) can return a proper error response
+  } finally {
+    transport.close(); // ✅ Always release the connection
+  }
+}
+
+export async function sendVerificationEmail(
+  to: string,
+  code: string
+): Promise<void> {
+  await sendMail(
     to,
-    subject: `${code} — Verify your Novix account`,
-    html: otpEmailHtml(
+    `${code} — Verify your Novix account`,
+    otpEmailHtml(
       'Verify Your Email',
       'Thanks for signing up! Enter the code below to verify your email address and activate your account.',
       code,
       'This code expires in <strong style="color:#fff;">15 minutes</strong>. Do not share it with anyone.'
     ),
-  });
+    'VerificationEmail'
+  );
 }
 
-export async function sendPasswordResetEmail(to: string, code: string) {
-  const transport = createTransport();
-  await transport.sendMail({
-    from: `"Novix Messenger" <${GMAIL_USER}>`,
+export async function sendPasswordResetEmail(
+  to: string,
+  code: string
+): Promise<void> {
+  await sendMail(
     to,
-    subject: `${code} — Reset your Novix password`,
-    html: otpEmailHtml(
+    `${code} — Reset your Novix password`,
+    otpEmailHtml(
       'Reset Your Password',
       'We received a request to reset the password for your Novix account. Enter the code below to proceed.',
       code,
       'This code expires in <strong style="color:#fff;">15 minutes</strong>. If you did not request a password reset, please ignore this email.'
     ),
-  });
+    'PasswordResetEmail'
+  );
 }
 
-export async function sendEmailChangeEmail(to: string, code: string) {
-  const transport = createTransport();
-  await transport.sendMail({
-    from: `"Novix Messenger" <${GMAIL_USER}>`,
+export async function sendEmailChangeEmail(
+  to: string,
+  code: string
+): Promise<void> {
+  await sendMail(
     to,
-    subject: `${code} — Confirm your new Novix email`,
-    html: otpEmailHtml(
+    `${code} — Confirm your new Novix email`,
+    otpEmailHtml(
       'Confirm Email Change',
       'Enter the code below to confirm this as the new email address for your Novix account.',
       code,
       'This code expires in <strong style="color:#fff;">15 minutes</strong>. Your email will not change until you enter this code.'
     ),
-  });
+    'EmailChangeEmail'
+  );
 }
 
 export function generateOTP(): string {
