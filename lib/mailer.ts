@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
@@ -9,28 +10,29 @@ if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
   );
 }
 
+// ✅ Explicitly typed as SMTPTransport.Options — fixes "host does not exist" TS error
+const transportOptions: SMTPTransport.Options = {
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // false = STARTTLS on port 587 (Render compatible)
+  auth: {
+    user: GMAIL_USER,
+    pass: GMAIL_APP_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+  },
+  family: 4, // Force IPv4 — Render IPv6 outbound is unreliable
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
+};
+
 function createTransport() {
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,          // ✅ Use 587 (STARTTLS) — Render often blocks 465
-    secure: false,      // ✅ false for port 587 (STARTTLS upgrades the connection)
-    auth: {
-      user: GMAIL_USER,
-      pass: GMAIL_APP_PASSWORD,
-    },
-    tls: {
-      rejectUnauthorized: true,   // ✅ Enforce valid certs
-      minVersion: 'TLSv1.2',      // ✅ Modern TLS only
-    },
-    // Force IPv4 — Render's IPv6 outbound is unreliable
-    family: 4,
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-  });
+  return nodemailer.createTransport(transportOptions);
 }
 
-// ✅ Verify transport connection once at startup (helps catch config errors early)
 export async function verifyMailTransport(): Promise<void> {
   const transport = createTransport();
   try {
@@ -103,14 +105,13 @@ function otpEmailHtml(
 </html>`;
 }
 
-// ✅ Shared send helper with logging and guaranteed cleanup
+// ✅ Shared send helper with full logging and guaranteed cleanup
 async function sendMail(
   to: string,
   subject: string,
   html: string,
   label: string
 ): Promise<void> {
-  // Guard: don't even try if credentials are missing
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     throw new Error(
       `[Mailer] Cannot send ${label} — GMAIL_USER or GMAIL_APP_PASSWORD env var is missing.`
@@ -135,7 +136,6 @@ async function sendMail(
       rejected: info.rejected,
     });
   } catch (err: unknown) {
-    // ✅ Detailed error logging so you can debug on Render logs
     console.error(`[Mailer] Failed to send ${label} to ${to}:`, {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
@@ -144,10 +144,9 @@ async function sendMail(
       response: (err as Record<string, unknown>)?.response,
       responseCode: (err as Record<string, unknown>)?.responseCode,
     });
-
-    throw err; // Re-throw so the caller (API route) can return a proper error response
+    throw err;
   } finally {
-    transport.close(); // ✅ Always release the connection
+    transport.close();
   }
 }
 
