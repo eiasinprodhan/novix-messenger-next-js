@@ -1,5 +1,11 @@
 const path = require('path');
 const dotenv = require('dotenv');
+const dns = require('dns');
+
+// Force IPv4 resolution to prevent ETIMEDOUT issues on local environments/ISPs that do not support IPv6 SMTP
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
