@@ -10,9 +10,9 @@ function createTransport() {
       user: GMAIL_USER,
       pass: GMAIL_APP_PASSWORD,
     },
-    connectionTimeout: 5000, // 5 seconds
-    greetingTimeout: 5000,   // 5 seconds
-    socketTimeout: 5000,     // 5 seconds
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,   // 30 seconds
+    socketTimeout: 30000,     // 30 seconds
   });
 }
 

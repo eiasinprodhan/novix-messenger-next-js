@@ -116,6 +116,12 @@ export async function POST(request: NextRequest) {
       console.log('>>> [CHANGE-EMAIL] OTP sent to new email', newEmail);
     } catch (emailErr: any) {
       console.error('>>> [CHANGE-EMAIL] Email failed:', emailErr.message);
+      // Clean up database state if email sending failed
+      user.pendingEmail = undefined;
+      user.pendingEmailCode = undefined;
+      user.pendingEmailCodeExpires = undefined;
+      user.pendingEmailResendAt = undefined;
+      await user.save();
       return NextResponse.json({ error: 'Failed to send verification email. Please try again.' }, { status: 500, headers: corsHeaders() });
     }
 
