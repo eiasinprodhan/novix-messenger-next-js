@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
       verificationCodeExpires: expires,
     });
 
-    // Send OTP email
-    try {
-      await sendVerificationEmail(user.email, code);
-      console.log('>>> [REGISTER] Verification email sent to', user.email);
-    } catch (emailErr: any) {
-      console.error('>>> [REGISTER] Email send failed:', emailErr.message);
-      // Don't block registration if email fails — user can resend
-    }
+    // Send OTP email (non-blocking background task)
+    sendVerificationEmail(user.email, code)
+      .then(() => {
+        console.log('>>> [REGISTER] Verification email sent to', user.email);
+      })
+      .catch((emailErr: any) => {
+        console.error('>>> [REGISTER] Email send failed:', emailErr.message);
+      });
 
     console.log('>>> [REGISTER] SUCCESS for', user.email, '— awaiting verification');
 

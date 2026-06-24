@@ -48,11 +48,14 @@ export async function POST(request: NextRequest) {
       user.verificationCodeExpires = expires;
       await user.save();
 
-      try {
-        await sendVerificationEmail(user.email, code);
-      } catch (emailErr: any) {
-        console.error('>>> [LOGIN] Email resend failed:', emailErr.message);
-      }
+      // Send OTP email (non-blocking background task)
+      sendVerificationEmail(user.email, code)
+        .then(() => {
+          console.log('>>> [LOGIN] Verification email sent to', user.email);
+        })
+        .catch((emailErr: any) => {
+          console.error('>>> [LOGIN] Email resend failed:', emailErr.message);
+        });
 
       console.log('>>> [LOGIN] User not verified — resent OTP to', user.email);
 
