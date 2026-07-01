@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
         { sender: friendId, receiver: payload.userId },
       ],
       isDeleted: false,
+      deletedBy: { $ne: payload.userId },
     })
       .sort({ createdAt: -1 })
       .limit(limit)

@@ -54,6 +54,12 @@ const MessageSchema: Schema<IMessage> = new Schema(
       type: Boolean,
       default: false,
     },
+    deletedBy: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     replyTo: {
       type: Schema.Types.ObjectId,
       ref: 'Message',
