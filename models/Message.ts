@@ -5,13 +5,14 @@ export interface IMessage extends Document {
   receiver?: mongoose.Types.ObjectId;      // For 1:1 chats
   group?: mongoose.Types.ObjectId;         // For group chats
   content: string;
-  type: 'text' | 'image' | 'system';
+  type: 'text' | 'image' | 'system' | 'audio' | 'voice' | 'video' | 'document';
   imageUrl?: string;
   status: 'sent' | 'delivered' | 'read';
   isDeleted: boolean;
+  isPinned: boolean;
+  deletedBy: mongoose.Types.ObjectId[];
   replyTo?: mongoose.Types.ObjectId;
   reactions: { user: mongoose.Types.ObjectId; emoji: string }[];
-  isPinned: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
