@@ -35,7 +35,7 @@ const MessageSchema: Schema<IMessage> = new Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'image', 'system'],
+      enum: ['text', 'image', 'system', 'audio', 'voice', 'video', 'document'],
       default: 'text',
     },
     imageUrl: {
@@ -47,6 +47,10 @@ const MessageSchema: Schema<IMessage> = new Schema(
       default: 'sent',
     },
     isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    isPinned: {
       type: Boolean,
       default: false,
     },
