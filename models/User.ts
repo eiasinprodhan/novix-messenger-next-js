@@ -28,6 +28,7 @@ export interface IUser extends Document {
   lastSeenPrivacy: 'everyone' | 'contacts' | 'nobody';
   readReceiptsEnabled: boolean;
   typingIndicatorsEnabled: boolean;
+  hiddenChats: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -73,6 +74,7 @@ const UserSchema: Schema<IUser> = new Schema(
     lastSeenPrivacy: { type: String, enum: ['everyone', 'contacts', 'nobody'], default: 'everyone' },
     readReceiptsEnabled: { type: Boolean, default: true },
     typingIndicatorsEnabled: { type: Boolean, default: true },
+    hiddenChats: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );

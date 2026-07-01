@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
           { sender: payload.userId, receiver: otherUser._id },
           { sender: otherUser._id, receiver: payload.userId },
         ],
+        deletedBy: { $ne: payload.userId },
       })
         .sort({ createdAt: -1 })
         .select('content createdAt sender type imageUrl status');
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
         sender: otherUser._id,
         receiver: payload.userId,
         status: { $ne: 'read' },
+        deletedBy: { $ne: payload.userId },
       });
 
       return {
@@ -85,6 +87,14 @@ export async function GET(request: NextRequest) {
         isRequester,
       };
     }));
+
+    // For 'friends' type, filter out chats the user has hidden (deleted from their view)
+    if (type === 'friends') {
+      const currentUser = await User.findById(payload.userId).select('hiddenChats');
+      const hiddenIds = (currentUser?.hiddenChats ?? []).map((id: any) => id.toString());
+      const filtered = results.filter((r) => !hiddenIds.includes(r.otherUser._id.toString()));
+      return NextResponse.json({ friendships: filtered });
+    }
 
     return NextResponse.json({ friendships: results });
   } catch (error) {

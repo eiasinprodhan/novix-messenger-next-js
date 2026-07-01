@@ -150,6 +150,10 @@ export async function POST(request: NextRequest) {
 
     const populated = await message.populate('sender', 'name username avatar');
 
+    // Unhide chat for both users on new message
+    await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
+    await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
+
     // Emit real-time event via socket
     try {
       const { getIO } = await import('@/lib/socket');
