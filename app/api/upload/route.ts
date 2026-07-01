@@ -21,30 +21,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Validate file type — use MIME type if available, else infer from extension
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const extToMime: Record<string, string> = {
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      webp: 'image/webp',
-      gif: 'image/gif',
-    };
-    const fileExt = (file.name.split('.').pop() || '').toLowerCase();
-    const resolvedType = allowedTypes.includes(file.type)
-      ? file.type
-      : extToMime[fileExt] ?? '';
-
-    if (!resolvedType) {
-      return NextResponse.json(
-        { error: 'Only JPEG, PNG, WEBP, and GIF images are allowed' },
-        { status: 400 }
-      );
-    }
-
-    // Validate size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large. Max 5MB.' }, { status: 400 });
+    // Validate size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File too large. Max 25MB.' }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -57,9 +36,28 @@ export async function POST(request: NextRequest) {
       'image/png': 'png',
       'image/webp': 'webp',
       'image/gif': 'gif',
+      'audio/mpeg': 'mp3',
+      'audio/wav': 'wav',
+      'audio/ogg': 'ogg',
+      'audio/webm': 'webm',
+      'audio/aac': 'aac',
+      'audio/x-aac': 'aac',
+      'audio/x-m4a': 'm4a',
+      'audio/m4a': 'm4a',
+      'audio/mp4': 'm4a',
+      'application/pdf': 'pdf',
     };
-    const ext = extMap[resolvedType] || fileExt || 'jpg';
-    const filename = `img_${timestamp}_${Math.random().toString(36).substring(7)}.${ext}`;
+    const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+    const ext = fileExt || extMap[file.type] || 'bin';
+
+    let prefix = 'file';
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+      prefix = 'img';
+    } else if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'].includes(ext)) {
+      prefix = 'audio';
+    }
+
+    const filename = `${prefix}_${timestamp}_${Math.random().toString(36).substring(7)}.${ext}`;
 
     // Ensure uploads directory exists
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
