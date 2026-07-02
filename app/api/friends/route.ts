@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'friends';
+    const includeHidden = searchParams.get('includeHidden') === 'true';
 
     let query: any = {};
 
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
     }));
 
     // For 'friends' type, filter out chats the user has hidden (deleted from their view)
-    if (type === 'friends') {
+    if (type === 'friends' && !includeHidden) {
       const currentUser = await User.findById(payload.userId).select('hiddenChats');
       const hiddenIds = (currentUser?.hiddenChats ?? []).map((id: any) => id.toString());
       const filtered = results.filter((r) => !hiddenIds.includes(r.otherUser._id.toString()));
