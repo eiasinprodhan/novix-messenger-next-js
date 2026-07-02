@@ -5,7 +5,7 @@ export interface IMessage extends Document {
   receiver?: mongoose.Types.ObjectId;      // For 1:1 chats
   group?: mongoose.Types.ObjectId;         // For group chats
   content: string;
-  type: 'text' | 'image' | 'system' | 'audio' | 'voice' | 'video' | 'document';
+  type: 'text' | 'image' | 'system' | 'audio' | 'voice' | 'video' | 'document' | 'call';
   imageUrl?: string;
   status: 'sent' | 'delivered' | 'read';
   isDeleted: boolean;
@@ -36,7 +36,7 @@ const MessageSchema: Schema<IMessage> = new Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'image', 'system', 'audio', 'voice', 'video', 'document'],
+      enum: ['text', 'image', 'system', 'audio', 'voice', 'video', 'document', 'call'],
       default: 'text',
     },
     imageUrl: {
