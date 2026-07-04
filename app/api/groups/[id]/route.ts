@@ -29,6 +29,11 @@ export async function GET(
     }
 
     return NextResponse.json({ group });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Failed to get group' }, { status: 500 });
+  }
+}
+
 // DELETE group
 export async function DELETE(
   request: NextRequest,
