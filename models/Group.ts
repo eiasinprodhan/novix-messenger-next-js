@@ -56,7 +56,7 @@ const GroupSchema: Schema<IGroup> = new Schema(
 );
 
 // Ensure creator is always admin
-GroupSchema.pre('save', function (next: any) {
+GroupSchema.pre('save', function () {
   if (this.isNew) {
     const creatorExists = this.members.some(
       (m) => m && m.user && this.createdBy && m.user.toString() === this.createdBy.toString() && m.role === 'admin'
@@ -69,7 +69,6 @@ GroupSchema.pre('save', function (next: any) {
       } as any);
     }
   }
-  next();
 });
 
 const Group: Model<IGroup> = mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);
