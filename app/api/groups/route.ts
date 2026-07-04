@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
       .populate('createdBy', 'name username');
 
     return NextResponse.json({ success: true, group: populated }, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create group' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error creating group:', error);
+    return NextResponse.json({ error: error?.message || 'Failed to create group' }, { status: 500 });
   }
 }

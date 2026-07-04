@@ -59,9 +59,9 @@ const GroupSchema: Schema<IGroup> = new Schema(
 GroupSchema.pre('save', function (next: any) {
   if (this.isNew) {
     const creatorExists = this.members.some(
-      (m) => m.user.toString() === this.createdBy.toString() && m.role === 'admin'
+      (m) => m && m.user && this.createdBy && m.user.toString() === this.createdBy.toString() && m.role === 'admin'
     );
-    if (!creatorExists) {
+    if (!creatorExists && this.createdBy) {
       this.members.push({
         user: this.createdBy,
         role: 'admin',

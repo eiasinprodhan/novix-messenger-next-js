@@ -29,7 +29,32 @@ export async function GET(
     }
 
     return NextResponse.json({ group });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch group' }, { status: 500 });
+// DELETE group
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const { id } = await params;
+    const payload = getUserFromRequest(request);
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const group = await Group.findById(id);
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Only the creator can delete the group
+    if (group.createdBy.toString() !== payload.userId) {
+      return NextResponse.json({ error: 'Only the creator can delete this group' }, { status: 403 });
+    }
+
+    group.isActive = false;
+    await group.save();
+
+    return NextResponse.json({ success: true, message: 'Group deleted successfully' });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Failed to delete group' }, { status: 500 });
   }
 }
