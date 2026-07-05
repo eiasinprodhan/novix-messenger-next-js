@@ -71,6 +71,13 @@ GroupSchema.pre('save', function () {
   }
 });
 
-const Group: Model<IGroup> = mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);
+if (mongoose.models.Group) {
+  try { mongoose.deleteModel('Group'); } catch (_) {}
+}
+if ((mongoose as any).modelSchemas && (mongoose as any).modelSchemas.Group) {
+  delete (mongoose as any).modelSchemas.Group;
+}
+
+const Group: Model<IGroup> = mongoose.model<IGroup>('Group', GroupSchema);
 
 export default Group;

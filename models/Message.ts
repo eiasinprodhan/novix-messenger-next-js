@@ -27,7 +27,13 @@ const MessageSchema: Schema<IMessage> = new Schema(
     receiver: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: function (this: any) {
+        return !this.group;
+      },
+    },
+    group: {
+      type: Schema.Types.ObjectId,
+      ref: 'Group',
     },
     content: {
       type: String,
@@ -75,6 +81,13 @@ const MessageSchema: Schema<IMessage> = new Schema(
   { timestamps: true }
 );
 
-const Message: Model<IMessage> = mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);
+if (mongoose.models.Message) {
+  try { mongoose.deleteModel('Message'); } catch (_) {}
+}
+if ((mongoose as any).modelSchemas && (mongoose as any).modelSchemas.Message) {
+  delete (mongoose as any).modelSchemas.Message;
+}
+
+const Message: Model<IMessage> = mongoose.model<IMessage>('Message', MessageSchema);
 
 export default Message;
