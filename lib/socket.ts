@@ -135,6 +135,29 @@ export function initSocketServer(server: NetServer) {
       });
     });
 
+    // READ GROUP MESSAGES
+    socket.on('read_group_messages', async ({ groupId }: { groupId: string }) => {
+      const userId = socket.data.userId;
+      if (!userId) return;
+
+      await connectDB();
+      await Message.updateMany(
+        {
+          group: groupId,
+          sender: { $ne: userId },
+          readBy: { $ne: userId }
+        },
+        {
+          $addToSet: { readBy: userId }
+        }
+      );
+
+      io?.to(`group:${groupId}`).emit('group_messages_read', {
+        groupId,
+        readerId: userId,
+      });
+    });
+
     // ─── CALL SIGNALING ─────────────────────────────────────────────────────
 
     // Caller initiates a 1:1 call

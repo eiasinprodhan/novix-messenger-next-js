@@ -25,6 +25,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
     }
 
+    // Mark messages as read by this user
+    await Message.updateMany(
+      {
+        group: groupId,
+        sender: { $ne: payload.userId },
+        readBy: { $ne: payload.userId }
+      },
+      {
+        $addToSet: { readBy: payload.userId }
+      }
+    );
+
+    // Emit read event to group room
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        io.to(`group:${groupId}`).emit('group_messages_read', {
+          groupId,
+          readerId: payload.userId,
+        });
+      }
+    } catch (_) {}
+
     const messages = await Message.find({
       group: groupId,
       isDeleted: false,
@@ -71,6 +95,7 @@ export async function POST(request: NextRequest) {
       imageUrl: imageUrl || null,
       status: 'sent',
       replyTo: replyTo || null,
+      readBy: [payload.userId], // sender has read their own message
     });
 
     const populated = await message.populate('sender', 'name username avatar');

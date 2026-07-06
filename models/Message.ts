@@ -13,6 +13,7 @@ export interface IMessage extends Document {
   deletedBy: mongoose.Types.ObjectId[];
   replyTo?: mongoose.Types.ObjectId;
   reactions: { user: mongoose.Types.ObjectId; emoji: string }[];
+  readBy: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +76,12 @@ const MessageSchema: Schema<IMessage> = new Schema(
       {
         user: { type: Schema.Types.ObjectId, ref: 'User' },
         emoji: { type: String },
+      },
+    ],
+    readBy: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
       },
     ],
   },
