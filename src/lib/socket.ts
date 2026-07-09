@@ -5,6 +5,7 @@ import User from '../models/User';
 import Message from '../models/Message';
 import Friendship from '../models/Friendship';
 import { invalidateFriendsCache, invalidateChatCache } from './redis';
+import { messaging } from './firebase-admin';
 
 let io: SocketIOServer | null = null;
 
@@ -177,7 +178,7 @@ export function initSocketServer(server: NetServer) {
     // the callee joins that same LiveKit room when they answer.
 
     // Caller starts a 1:1 call
-    socket.on('call_offer', (data: {
+    socket.on('call_offer', async (data: {
       targetUserId: string;
       roomName: string;
       callerInfo: { id: string; name: string; avatar?: string };
@@ -186,13 +187,55 @@ export function initSocketServer(server: NetServer) {
       const callerId = socket.data.userId;
       if (!callerId) return;
       console.log(`📞 [LiveKit] call_offer from ${callerId} → ${data.targetUserId}, room: ${data.roomName}`);
-      io?.to(`user:${data.targetUserId}`).emit('incoming_call', {
+
+      const incomingCallPayload = {
         callId: data.callId,
         callerId,
         roomName: data.roomName,
         callerInfo: data.callerInfo,
         isGroup: false,
-      });
+      };
+
+      // Emit via socket (for online users)
+      io?.to(`user:${data.targetUserId}`).emit('incoming_call', incomingCallPayload);
+
+      // Send FCM push for offline / background users
+      const isTargetOnline = onlineUsers.has(data.targetUserId) && (onlineUsers.get(data.targetUserId)?.size ?? 0) > 0;
+      if (!isTargetOnline && messaging) {
+        try {
+          await connectDB();
+          const targetUser = await User.findById(data.targetUserId).select('fcmToken').lean();
+          if (targetUser?.fcmToken) {
+            await messaging.send({
+              token: targetUser.fcmToken,
+              data: {
+                type: 'incoming_call',
+                callId: data.callId,
+                callerId,
+                roomName: data.roomName,
+                callerName: data.callerInfo.name,
+                callerAvatar: data.callerInfo.avatar ?? '',
+              },
+              android: {
+                priority: 'high',
+                ttl: 30000, // 30s — call expires
+              },
+              apns: {
+                headers: { 'apns-priority': '10' },
+                payload: {
+                  aps: {
+                    contentAvailable: true,
+                    sound: 'ringtone.mp3',
+                  },
+                },
+              },
+            });
+            console.log(`[FCM] Call notification sent to offline user ${data.targetUserId}`);
+          }
+        } catch (e) {
+          console.error('[FCM] Failed to send call notification:', e);
+        }
+      }
     });
 
     // Caller starts a group call
