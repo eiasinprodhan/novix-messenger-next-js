@@ -8,7 +8,8 @@ let isRedisAvailable = false;
 try {
   redis = new Redis(redisUrl, {
     maxRetriesPerRequest: 1,
-    connectTimeout: 2000,
+    connectTimeout: 500, // reduce connect timeout to 500ms for faster failover
+    enableOfflineQueue: false, // fail instantly if offline instead of queuing commands
     retryStrategy(times) {
       if (times > 3) {
         isRedisAvailable = false;
