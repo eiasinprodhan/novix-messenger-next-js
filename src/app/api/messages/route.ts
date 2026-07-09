@@ -5,6 +5,7 @@ import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
 import User from '@/models/User';
 import { messaging } from '@/lib/firebase-admin';
+import { getCache, setCache, invalidateFriendsCache, invalidateChatCache } from '@/lib/redis';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,10 +37,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Mark messages sent by friendId to current user as 'read'
-    await Message.updateMany(
+    const updateResult = await Message.updateMany(
       { sender: friendId, receiver: payload.userId, status: { $ne: 'read' } },
       { status: 'read' }
     );
+
+    if (updateResult.modifiedCount > 0) {
+      await invalidateFriendsCache(payload.userId);
+      await invalidateFriendsCache(friendId);
+      await invalidateChatCache(payload.userId, friendId);
+    }
+
+    const sortedIds = [payload.userId, friendId].sort().join('_');
+    const cacheKey = `chat:${sortedIds}:messages:limit:${limit}`;
+    const cachedData = await getCache<{ messages: any[] }>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData);
+    }
 
     // Emit read receipt event via socket
     try {
@@ -73,7 +87,10 @@ export async function GET(request: NextRequest) {
         populate: { path: 'sender', select: 'name username' }
       });
 
-    return NextResponse.json({ messages: messages.reverse() });
+    const finalResponse = { messages: messages.reverse() };
+    await setCache(cacheKey, finalResponse, 600); // cache messages for 10 minutes
+
+    return NextResponse.json(finalResponse);
   } catch (error) {
     console.error('Messages GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
@@ -153,6 +170,10 @@ export async function POST(request: NextRequest) {
     // Unhide chat for both users on new message
     await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
     await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
+
+    await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(receiverId);
+    await invalidateChatCache(payload.userId, receiverId);
 
     // Emit real-time event via socket
     try {

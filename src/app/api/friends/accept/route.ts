@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
+import { invalidateFriendsCache } from '@/lib/redis';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
 
     friendship.status = 'accepted';
     await friendship.save();
+
+    await invalidateFriendsCache(friendship.requester.toString());
+    await invalidateFriendsCache(friendship.recipient.toString());
 
     return NextResponse.json({
       success: true,

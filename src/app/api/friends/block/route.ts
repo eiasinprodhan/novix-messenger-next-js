@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
+import { invalidateFriendsCache } from '@/lib/redis';
 
 // POST /api/friends/block
 export async function POST(request: NextRequest) {
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(friendId);
+
     return NextResponse.json({ success: true, friendship });
   } catch (error) {
     console.error('Block POST error:', error);
@@ -91,6 +95,9 @@ export async function DELETE(request: NextRequest) {
 
     // Delete the block friendship
     await Friendship.findByIdAndDelete(friendship._id);
+
+    await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(friendId);
 
     return NextResponse.json({ success: true, message: 'User unblocked successfully' });
   } catch (error) {

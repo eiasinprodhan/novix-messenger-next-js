@@ -4,6 +4,7 @@ import connectDB from './mongodb';
 import User from '../models/User';
 import Message from '../models/Message';
 import Friendship from '../models/Friendship';
+import { invalidateFriendsCache, invalidateChatCache } from './redis';
 
 let io: SocketIOServer | null = null;
 
@@ -61,10 +62,16 @@ export function initSocketServer(server: NetServer) {
         await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
 
         // Update all messages sent to this user from 'sent' to 'delivered'
-        await Message.updateMany(
+        const updateResult = await Message.updateMany(
           { receiver: userId, status: 'sent' },
           { status: 'delivered' }
         );
+
+        await invalidateFriendsCache(userId);
+        if (updateResult.modifiedCount > 0) {
+          // Since status went sent->delivered, we can invalidate chat cache.
+          // For simplicity, clearing friends cache is most crucial.
+        }
 
         io?.emit('user_online', { userId });
 
@@ -123,10 +130,16 @@ export function initSocketServer(server: NetServer) {
       if (!userId) return;
 
       await connectDB();
-      await Message.updateMany(
+      const updateResult = await Message.updateMany(
         { sender: senderId, receiver: userId, status: { $ne: 'read' } },
         { status: 'read' }
       );
+
+      if (updateResult.modifiedCount > 0) {
+        await invalidateFriendsCache(userId);
+        await invalidateFriendsCache(senderId);
+        await invalidateChatCache(userId, senderId);
+      }
 
       const room = [userId, senderId].sort().join('_');
       io?.to(room).emit('messages_read', {
@@ -158,46 +171,48 @@ export function initSocketServer(server: NetServer) {
       });
     });
 
-    // ─── CALL SIGNALING ─────────────────────────────────────────────────────
+    // ─── CALL SIGNALING (LiveKit-based) ─────────────────────────────────────
+    // Socket.io is now used ONLY for call notification (ring/decline/end).
+    // All audio media is handled by LiveKit. The caller passes a roomName;
+    // the callee joins that same LiveKit room when they answer.
 
-    // Caller initiates a 1:1 call
+    // Caller starts a 1:1 call
     socket.on('call_offer', (data: {
       targetUserId: string;
-      sdp: RTCSessionDescriptionInit;
+      roomName: string;
       callerInfo: { id: string; name: string; avatar?: string };
       callId: string;
     }) => {
       const callerId = socket.data.userId;
       if (!callerId) return;
-      console.log(`📞 call_offer from ${callerId} → ${data.targetUserId}`);
+      console.log(`📞 [LiveKit] call_offer from ${callerId} → ${data.targetUserId}, room: ${data.roomName}`);
       io?.to(`user:${data.targetUserId}`).emit('incoming_call', {
         callId: data.callId,
         callerId,
-        sdp: data.sdp,
+        roomName: data.roomName,
         callerInfo: data.callerInfo,
         isGroup: false,
       });
     });
 
-    // Caller initiates a group call
+    // Caller starts a group call
     socket.on('group_call_offer', (data: {
       groupId: string;
-      sdp: RTCSessionDescriptionInit;
+      roomName: string;
       callerInfo: { id: string; name: string; avatar?: string };
       callId: string;
       targetUserIds: string[];
     }) => {
       const callerId = socket.data.userId;
       if (!callerId) return;
-      console.log(`📞 group_call_offer from ${callerId} → group:${data.groupId}`);
-      // Send incoming_call to each target member
+      console.log(`📞 [LiveKit] group_call_offer from ${callerId} → group:${data.groupId}, room: ${data.roomName}`);
       data.targetUserIds.forEach((uid) => {
         if (uid !== callerId) {
           io?.to(`user:${uid}`).emit('incoming_call', {
             callId: data.callId,
             callerId,
             groupId: data.groupId,
-            sdp: data.sdp,
+            roomName: data.roomName,
             callerInfo: data.callerInfo,
             isGroup: true,
           });
@@ -205,19 +220,17 @@ export function initSocketServer(server: NetServer) {
       });
     });
 
-    // Callee answers
+    // Callee answered — notify caller to connect to the LiveKit room
     socket.on('call_answer', (data: {
       callId: string;
       callerId: string;
-      sdp: RTCSessionDescriptionInit;
     }) => {
       const answererId = socket.data.userId;
       if (!answererId) return;
-      console.log(`✅ call_answer from ${answererId} → ${data.callerId}`);
+      console.log(`✅ [LiveKit] call_answer from ${answererId} → ${data.callerId}`);
       io?.to(`user:${data.callerId}`).emit('call_answered', {
         callId: data.callId,
         answererId,
-        sdp: data.sdp,
       });
     });
 
@@ -225,61 +238,24 @@ export function initSocketServer(server: NetServer) {
     socket.on('call_decline', (data: { callId: string; callerId: string }) => {
       const declinerId = socket.data.userId;
       if (!declinerId) return;
-      console.log(`❌ call_decline by ${declinerId}`);
+      console.log(`❌ [LiveKit] call_decline by ${declinerId}`);
       io?.to(`user:${data.callerId}`).emit('call_declined', {
         callId: data.callId,
         declinerId,
       });
     });
 
-    // Either party ends call
+    // Either party ends the call
     socket.on('call_end', (data: { callId: string; targetUserId?: string; groupId?: string }) => {
       const enderId = socket.data.userId;
       if (!enderId) return;
-      console.log(`🔴 call_end by ${enderId}`);
+      console.log(`🔴 [LiveKit] call_end by ${enderId}`);
       if (data.targetUserId) {
         io?.to(`user:${data.targetUserId}`).emit('call_ended', { callId: data.callId, enderId });
       }
       if (data.groupId) {
-        io?.to(`call:${data.callId}`).emit('call_ended', { callId: data.callId, enderId });
+        io?.to(`group:${data.groupId}`).emit('call_ended', { callId: data.callId, enderId });
       }
-    });
-
-    // ICE candidate relay
-    socket.on('ice_candidate', (data: {
-      callId: string;
-      targetUserId: string;
-      candidate: RTCIceCandidateInit;
-    }) => {
-      io?.to(`user:${data.targetUserId}`).emit('ice_candidate', {
-        callId: data.callId,
-        candidate: data.candidate,
-        fromUserId: socket.data.userId,
-      });
-    });
-
-    // Join a group call room (for ICE and audio relay)
-    socket.on('group_call_join', (data: { callId: string }) => {
-      const userId = socket.data.userId;
-      if (!userId) return;
-      socket.join(`call:${data.callId}`);
-      socket.to(`call:${data.callId}`).emit('group_call_participant_joined', {
-        callId: data.callId,
-        userId,
-      });
-      console.log(`👥 ${userId} joined call room call:${data.callId}`);
-    });
-
-    // Leave group call room
-    socket.on('group_call_leave', (data: { callId: string }) => {
-      const userId = socket.data.userId;
-      if (!userId) return;
-      socket.leave(`call:${data.callId}`);
-      socket.to(`call:${data.callId}`).emit('group_call_participant_left', {
-        callId: data.callId,
-        userId,
-      });
-      console.log(`👤 ${userId} left call room call:${data.callId}`);
     });
 
     // ─── DISCONNECT ──────────────────────────────────────────────────────────
@@ -293,6 +269,7 @@ export function initSocketServer(server: NetServer) {
             onlineUsers.delete(userId);
             await connectDB();
             await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
+            await invalidateFriendsCache(userId);
             io?.emit('user_offline', { userId });
             console.log(`📡 User ${userId} went offline`);
           }

@@ -5,6 +5,7 @@ import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
 import { getIO } from '@/lib/socket';
 import { messaging } from '@/lib/firebase-admin';
+import { invalidateFriendsCache } from '@/lib/redis';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
       recipient: recipientId,
       status: 'pending',
     });
+
+    await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(recipientId);
 
     // Fetch the requester's info to include in the socket event
     const requester = await User.findById(payload.userId).select('name username avatar');

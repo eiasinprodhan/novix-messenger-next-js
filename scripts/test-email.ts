@@ -11,7 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 async function testMail() {
   // Dynamically import mailer after env config is loaded
-  const { sendVerificationEmail } = await import('../lib/mailer');
+  const { sendVerificationEmail } = await import('../src/lib/mailer');
   const targetEmail = 'cyberloomittechnologies@gmail.com';
   console.log('Sending test verification code to:', targetEmail);
 

@@ -5,11 +5,11 @@ dotenv.config({ path: resolve(process.cwd(), '.env') });
 
 async function clearDB() {
   try {
-    const connectDB = (await import('../lib/mongodb')).default;
-    const User = (await import('../models/User')).default;
-    const Friendship = (await import('../models/Friendship')).default;
-    const Group = (await import('../models/Group')).default;
-    const Message = (await import('../models/Message')).default;
+    const connectDB = (await import('../src/lib/mongodb')).default;
+    const User = (await import('../src/models/User')).default;
+    const Friendship = (await import('../src/models/Friendship')).default;
+    const Group = (await import('../src/models/Group')).default;
+    const Message = (await import('../src/models/Message')).default;
 
     console.log('⏳ Connecting to MongoDB...');
     await connectDB();

@@ -4,6 +4,7 @@ import Friendship from '@/models/Friendship';
 import User from '@/models/User';
 import Message from '@/models/Message';
 import { getUserFromRequest } from '@/lib/auth';
+import { getCache, setCache, invalidateFriendsCache } from '@/lib/redis';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,6 +18,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'friends';
     const includeHidden = searchParams.get('includeHidden') === 'true';
+
+    const cacheKey = `user:${payload.userId}:friends:${type}:${includeHidden}`;
+    const cachedData = await getCache<{ friendships: any }>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData);
+    }
 
     let query: any = {};
 
@@ -89,15 +96,19 @@ export async function GET(request: NextRequest) {
       };
     }));
 
+    let finalResponse;
     // For 'friends' type, filter out chats the user has hidden (deleted from their view)
     if (type === 'friends' && !includeHidden) {
       const currentUser = await User.findById(payload.userId).select('hiddenChats');
       const hiddenIds = (currentUser?.hiddenChats ?? []).map((id: any) => id.toString());
       const filtered = results.filter((r) => !hiddenIds.includes(r.otherUser._id.toString()));
-      return NextResponse.json({ friendships: filtered });
+      finalResponse = { friendships: filtered };
+    } else {
+      finalResponse = { friendships: results };
     }
 
-    return NextResponse.json({ friendships: results });
+    await setCache(cacheKey, finalResponse, 300);
+    return NextResponse.json(finalResponse);
   } catch (error) {
     console.error('Friends GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch friends' }, { status: 500 });
@@ -143,6 +154,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     await Friendship.findByIdAndDelete(friendship._id);
+
+    const firstUser = friendship.requester.toString();
+    const secondUser = friendship.recipient.toString();
+    await invalidateFriendsCache(firstUser);
+    await invalidateFriendsCache(secondUser);
 
     return NextResponse.json({ success: true, message: 'Friend request/friendship removed successfully' });
   } catch (error) {

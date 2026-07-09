@@ -13,7 +13,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const { createServer } = require('http');
 const next = require('next');
-const { initSocketServer } = require('./lib/socket');
+const { initSocketServer } = require('./src/lib/socket');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
