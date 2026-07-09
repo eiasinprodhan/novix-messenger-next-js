@@ -199,9 +199,8 @@ export function initSocketServer(server: NetServer) {
       // Emit via socket (for online users)
       io?.to(`user:${data.targetUserId}`).emit('incoming_call', incomingCallPayload);
 
-      // Send FCM push for offline / background users
-      const isTargetOnline = onlineUsers.has(data.targetUserId) && (onlineUsers.get(data.targetUserId)?.size ?? 0) > 0;
-      if (!isTargetOnline && messaging) {
+      // Send FCM push to ensure delivery if backgrounded/locked
+      if (messaging) {
         try {
           await connectDB();
           const targetUser = await User.findById(data.targetUserId).select('fcmToken').lean();
@@ -230,7 +229,7 @@ export function initSocketServer(server: NetServer) {
                 },
               },
             });
-            console.log(`[FCM] Call notification sent to offline user ${data.targetUserId}`);
+            console.log(`[FCM] Call notification sent to user ${data.targetUserId}`);
           }
         } catch (e) {
           console.error('[FCM] Failed to send call notification:', e);
