@@ -8,6 +8,9 @@ export interface IUser extends Document {
   password?: string;
   bio?: string;
   avatar?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  country?: string;
+  birthday?: Date;
   isVerified: boolean;
   verificationCode?: string;
   verificationCodeExpires?: Date;
@@ -54,6 +57,9 @@ const UserSchema: Schema<IUser> = new Schema(
     },
     bio: { type: String, default: '', maxlength: 150 },
     avatar: { type: String, default: '' },
+    gender: { type: String, enum: ['male', 'female', 'other', 'prefer_not_to_say'], default: null },
+    country: { type: String, trim: true, maxlength: 60, default: '' },
+    birthday: { type: Date, default: null },
     isVerified: { type: Boolean, default: false },
     verificationCode: String,
     verificationCodeExpires: Date,

@@ -56,13 +56,33 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, username, bio, avatar } = body;
+    const { name, username, bio, avatar, gender, country, birthday } = body;
 
     const updateData: any = {};
     if (name) updateData.name = name.trim();
     if (username) updateData.username = username.toLowerCase().trim();
     if (bio !== undefined) updateData.bio = bio.trim();
     if (avatar !== undefined) updateData.avatar = avatar; // support avatar URL
+    if (gender !== undefined) {
+      const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+      if (!validGenders.includes(gender)) {
+        return NextResponse.json({ error: 'Invalid gender value' }, { status: 400 });
+      }
+      updateData.gender = gender;
+    }
+    if (country !== undefined) updateData.country = country.trim();
+    if (birthday !== undefined) {
+      const birthdayDate = new Date(birthday);
+      if (isNaN(birthdayDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid birthday date' }, { status: 400 });
+      }
+      const minAgeDate = new Date();
+      minAgeDate.setFullYear(minAgeDate.getFullYear() - 13);
+      if (birthdayDate > minAgeDate) {
+        return NextResponse.json({ error: 'You must be at least 13 years old' }, { status: 400 });
+      }
+      updateData.birthday = birthdayDate;
+    }
 
     const user = await User.findByIdAndUpdate(
       id,

@@ -22,10 +22,27 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const { name, username, email, password } = await request.json();
+    const { name, username, email, password, gender, country, birthday } = await request.json();
 
-    if (!name || !username || !email || !password) {
-      return NextResponse.json({ error: 'All fields required' }, { status: 400, headers: corsHeaders() });
+    if (!name || !username || !email || !password || !gender || !country || !birthday) {
+      return NextResponse.json({ error: 'All fields required including gender, country and birthday' }, { status: 400, headers: corsHeaders() });
+    }
+
+    // Validate gender value
+    const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+    if (!validGenders.includes(gender)) {
+      return NextResponse.json({ error: 'Invalid gender value' }, { status: 400, headers: corsHeaders() });
+    }
+
+    // Validate birthday (must be a valid date, user must be at least 13)
+    const birthdayDate = new Date(birthday);
+    if (isNaN(birthdayDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid birthday date' }, { status: 400, headers: corsHeaders() });
+    }
+    const minAgeDate = new Date();
+    minAgeDate.setFullYear(minAgeDate.getFullYear() - 13);
+    if (birthdayDate > minAgeDate) {
+      return NextResponse.json({ error: 'You must be at least 13 years old to register' }, { status: 400, headers: corsHeaders() });
     }
 
     const existing = await User.findOne({ $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }] });
@@ -41,6 +58,9 @@ export async function POST(request: NextRequest) {
       username: username.toLowerCase().trim(),
       email: email.toLowerCase().trim(),
       password,
+      gender,
+      country: country.trim(),
+      birthday: birthdayDate,
       isVerified: false,
       verificationCode: code,
       verificationCodeExpires: expires,

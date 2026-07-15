@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const { idToken } = await request.json();
+    const { idToken, gender, country, birthday } = await request.json();
 
     if (!idToken) {
       return NextResponse.json({ error: 'idToken is required' }, { status: 400, headers: corsHeaders() });
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user exists by googleId first
     let user = await User.findOne({ googleId });
+    let requiresProfileCompletion = false;
 
     if (!user) {
       // If not, check if user exists by email
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
         if (!user.avatar && picture) user.avatar = picture;
         // Google verified users are auto-verified
         user.isVerified = true;
+        // Update profile fields if provided
+        if (gender) (user as any).gender = gender;
+        if (country) (user as any).country = country.trim();
+        if (birthday) (user as any).birthday = new Date(birthday);
         await user.save();
       } else {
         // Create new user
@@ -77,6 +82,11 @@ export async function POST(request: NextRequest) {
           suffix++;
         }
 
+        // Check if profile fields are provided
+        if (!gender || !country || !birthday) {
+          requiresProfileCompletion = true;
+        }
+
         user = await User.create({
           name: name || 'Google User',
           username,
@@ -87,6 +97,9 @@ export async function POST(request: NextRequest) {
           isOnline: true,
           lastSeen: new Date(),
           lastActiveAt: new Date(),
+          ...(gender && { gender }),
+          ...(country && { country: country.trim() }),
+          ...(birthday && { birthday: new Date(birthday) }),
         });
       }
     } else {
@@ -94,7 +107,17 @@ export async function POST(request: NextRequest) {
       user.isOnline = true;
       user.lastSeen = new Date();
       user.lastActiveAt = new Date();
+      // Update profile fields if provided
+      if (gender) (user as any).gender = gender;
+      if (country) (user as any).country = country.trim();
+      if (birthday) (user as any).birthday = new Date(birthday);
       await user.save();
+    }
+
+    // Flag if core profile fields are still missing
+    const userData = user.toJSON() as any;
+    if (!userData.gender || !userData.country || !userData.birthday) {
+      requiresProfileCompletion = true;
     }
 
     const accessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
@@ -108,6 +131,7 @@ export async function POST(request: NextRequest) {
       user: user.toJSON(),
       accessToken,
       refreshToken,
+      requiresProfileCompletion,
     }, { status: 200, headers: corsHeaders() });
 
   } catch (error: any) {
@@ -115,3 +139,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Google login failed' }, { status: 500, headers: corsHeaders() });
   }
 }
+
