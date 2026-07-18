@@ -36,6 +36,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404, headers: corsHeaders() });
     }
 
+    const deviceId = request.headers.get('x-device-id');
+    if (deviceId && user.devices && user.devices.length > 0) {
+      const exists = user.devices.some((d: any) => d.deviceId === deviceId);
+      if (!exists) {
+        return NextResponse.json({ error: 'Session expired or device logged out' }, { status: 401, headers: corsHeaders() });
+      }
+    }
+
     // Check 30-day inactivity — if lastActiveAt is older than 30 days, reject
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     if (user.lastActiveAt < thirtyDaysAgo) {
@@ -48,6 +56,11 @@ export async function POST(request: NextRequest) {
     // Rolling refresh: update lastActiveAt and issue new tokens
     user.lastActiveAt = new Date();
     await user.save();
+
+    if (deviceId) {
+      const { updateDeviceActivity } = await import('@/lib/device');
+      await updateDeviceActivity(user._id.toString(), request);
+    }
 
     const newAccessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
     const newRefreshToken = generateRefreshToken({ userId: user._id.toString(), email: user.email, role: user.role });

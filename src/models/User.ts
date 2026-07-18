@@ -32,6 +32,15 @@ export interface IUser extends Document {
   readReceiptsEnabled: boolean;
   typingIndicatorsEnabled: boolean;
   hiddenChats: mongoose.Types.ObjectId[];
+  devices: {
+    deviceId: string;
+    deviceName: string;
+    deviceType: string;
+    os: string;
+    browser: string;
+    ipAddress: string;
+    lastActiveAt: Date;
+  }[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -81,6 +90,17 @@ const UserSchema: Schema<IUser> = new Schema(
     readReceiptsEnabled: { type: Boolean, default: true },
     typingIndicatorsEnabled: { type: Boolean, default: true },
     hiddenChats: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    devices: [
+      {
+        deviceId: { type: String, required: true },
+        deviceName: { type: String, default: 'Unknown Device' },
+        deviceType: { type: String, default: 'unknown' },
+        os: { type: String, default: '' },
+        browser: { type: String, default: '' },
+        ipAddress: { type: String, default: '' },
+        lastActiveAt: { type: Date, default: Date.now },
+      }
+    ],
   },
   { timestamps: true }
 );

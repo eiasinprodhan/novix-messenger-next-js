@@ -72,6 +72,12 @@ export async function POST(request: NextRequest) {
     user.lastActiveAt = new Date();
     await user.save();
 
+    const deviceId = request.headers.get('x-device-id');
+    if (deviceId) {
+      const { updateDeviceActivity } = await import('@/lib/device');
+      await updateDeviceActivity(user._id.toString(), request);
+    }
+
     const accessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user._id.toString(), email: user.email, role: user.role });
 
