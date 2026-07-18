@@ -3,6 +3,7 @@ import '@/models/User';
 import '@/models/Friendship';
 import '@/models/Message';
 import '@/models/Group';
+import '@/models/Story';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/novix_messenger';
 

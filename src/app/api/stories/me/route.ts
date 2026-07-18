@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from 'next/server';
+import connectDB from '@/lib/mongodb';
+import Story from '@/models/Story';
+import { getUserFromRequest } from '@/lib/auth';
+
+export async function GET(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const payload = getUserFromRequest(request);
+    if (!payload) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const stories = await Story.find({
+      user: payload.userId,
+      isArchived: false,
+    })
+      .sort({ createdAt: -1 })
+      .populate('user', 'name username avatar');
+
+    return NextResponse.json({ success: true, stories });
+  } catch (error) {
+    console.error('Stories me GET error:', error);
+    return NextResponse.json({ error: 'Failed to fetch own stories' }, { status: 500 });
+  }
+}
