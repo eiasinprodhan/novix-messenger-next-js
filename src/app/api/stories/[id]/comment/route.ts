@@ -74,7 +74,8 @@ export async function POST(
       sender: payload.userId,
       receiver: receiverId,
       content: messageContent,
-      type: 'text',
+      type: 'image',
+      imageUrl: story.imageUrl,
       status: initialStatus,
     });
 
