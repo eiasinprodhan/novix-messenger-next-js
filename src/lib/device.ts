@@ -12,7 +12,7 @@ export async function updateDeviceActivity(userId: string, req: NextRequest) {
   
   // Extract IP Address robustly
   const forwarded = req.headers.get('x-forwarded-for');
-  const ipAddress = forwarded ? forwarded.split(',')[0].trim() : (req.ip || '127.0.0.1');
+  const ipAddress = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
 
   try {
     const user = await User.findById(userId);
