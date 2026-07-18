@@ -17,7 +17,10 @@ export async function GET(request: NextRequest) {
       isArchived: true,
     })
       .sort({ createdAt: -1 })
-      .populate('user', 'name username avatar');
+      .populate([
+        { path: 'user', select: 'name username avatar' },
+        { path: 'reactions.user', select: 'name username avatar' }
+      ]);
 
     return NextResponse.json({ success: true, stories });
   } catch (error) {

@@ -67,7 +67,10 @@ export async function GET(request: NextRequest) {
       createdAt: { $gte: activeTimeLimit },
     })
       .sort({ createdAt: 1 }) // oldest first to play in sequence
-      .populate('user', 'name username avatar');
+      .populate([
+        { path: 'user', select: 'name username avatar' },
+        { path: 'reactions.user', select: 'name username avatar' }
+      ]);
 
     return NextResponse.json({ success: true, stories });
   } catch (error) {
