@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Story from '@/models/Story';
 import { getUserFromRequest } from '@/lib/auth';
@@ -31,7 +32,10 @@ export async function POST(
     if (existingIndex > -1) {
       story.reactions[existingIndex].reaction = reaction;
     } else {
-      story.reactions.push({ user: payload.userId, reaction });
+      story.reactions.push({
+        user: new mongoose.Types.ObjectId(payload.userId) as any,
+        reaction,
+      });
     }
 
     await story.save();
