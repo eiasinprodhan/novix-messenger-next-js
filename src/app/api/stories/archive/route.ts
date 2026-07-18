@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .populate([
         { path: 'user', select: 'name username avatar' },
-        { path: 'reactions.user', select: 'name username avatar' }
+        { path: 'reactions.user', select: 'name username avatar' },
+        { path: 'viewers', select: 'name username avatar' }
       ]);
 
     return NextResponse.json({ success: true, stories });

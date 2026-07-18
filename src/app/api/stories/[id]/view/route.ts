@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Story from '@/models/Story';
 import { getUserFromRequest } from '@/lib/auth';
 
-export async function PATCH(
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -13,19 +13,21 @@ export async function PATCH(
     const payload = getUserFromRequest(request);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { isArchived } = await request.json();
-
     const story = await Story.findById(id);
     if (!story) {
       return NextResponse.json({ error: 'Story not found' }, { status: 404 });
     }
 
+    // Do not add the owner to viewers
     if (story.user.toString() !== payload.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      if (!story.viewers) {
+        story.viewers = [];
+      }
+      if (!story.viewers.some((vId) => vId.toString() === payload.userId)) {
+        story.viewers.push(payload.userId as any);
+        await story.save();
+      }
     }
-
-    story.isArchived = isArchived;
-    await story.save();
 
     const populated = await story.populate([
       { path: 'user', select: 'name username avatar' },
@@ -35,7 +37,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, story: populated });
   } catch (error) {
-    console.error('Story archive error:', error);
-    return NextResponse.json({ error: 'Failed to archive story' }, { status: 500 });
+    console.error('Story view error:', error);
+    return NextResponse.json({ error: 'Failed to record story view' }, { status: 500 });
   }
 }

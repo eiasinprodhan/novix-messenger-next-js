@@ -42,7 +42,8 @@ export async function POST(
 
     const populated = await story.populate([
       { path: 'user', select: 'name username avatar' },
-      { path: 'reactions.user', select: 'name username avatar' }
+      { path: 'reactions.user', select: 'name username avatar' },
+      { path: 'viewers', select: 'name username avatar' }
     ]);
 
     return NextResponse.json({ success: true, story: populated });

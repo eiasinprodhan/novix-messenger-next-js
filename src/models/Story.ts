@@ -8,6 +8,7 @@ export interface IStory extends Document {
     user: mongoose.Types.ObjectId;
     reaction: string;
   }[];
+  viewers: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +39,12 @@ const StorySchema: Schema<IStory> = new Schema(
           type: String,
           required: true,
         },
+      },
+    ],
+    viewers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
       },
     ],
   },
