@@ -50,7 +50,7 @@ app.prepare().then(() => {
       );
       res.setHeader(
         'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, Accept'
+        'Content-Type, Authorization, Accept, x-device-id, x-device-name, x-device-type, x-device-os, x-device-browser'
       );
       res.setHeader('Access-Control-Max-Age', '86400');
 
