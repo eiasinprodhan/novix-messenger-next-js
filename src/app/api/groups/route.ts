@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const payload = getUserFromRequest(request);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { name, description, memberIds = [] } = await request.json();
+    const { name, description, avatar, memberIds = [] } = await request.json();
 
     if (!name || name.trim().length < 2) {
       return NextResponse.json({ error: 'Group name is required' }, { status: 400 });
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     const group = await Group.create({
       name: name.trim(),
       description: description?.trim() || '',
+      avatar: avatar || '',
       createdBy: payload.userId,
       members,
     });

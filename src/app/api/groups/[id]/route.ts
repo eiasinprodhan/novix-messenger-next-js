@@ -63,3 +63,62 @@ export async function DELETE(
     return NextResponse.json({ error: error?.message || 'Failed to delete group' }, { status: 500 });
   }
 }
+
+// PUT update group details (name, description, avatar)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const { id } = await params;
+    const payload = getUserFromRequest(request);
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const group = await Group.findById(id);
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Check membership and admin permissions
+    const currentUserMember = group.members.find(
+      (m: any) => m.user.toString() === payload.userId
+    );
+    if (!currentUserMember) {
+      return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+    }
+
+    const isCreator = group.createdBy.toString() === payload.userId;
+    const isAdmin = currentUserMember.role === 'admin' || isCreator;
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Only group admins can update group details' }, { status: 403 });
+    }
+
+    const { name, description, avatar } = await request.json();
+
+    if (name !== undefined) {
+      if (!name || name.trim().length < 2) {
+        return NextResponse.json({ error: 'Group name must be at least 2 characters' }, { status: 400 });
+      }
+      group.name = name.trim();
+    }
+
+    if (description !== undefined) {
+      group.description = description.trim();
+    }
+
+    if (avatar !== undefined) {
+      group.avatar = avatar;
+    }
+
+    await group.save();
+
+    const populated = await Group.findById(group._id)
+      .populate('members.user', 'name username avatar isOnline lastSeen')
+      .populate('createdBy', 'name username');
+
+    return NextResponse.json({ success: true, group: populated });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Failed to update group' }, { status: 500 });
+  }
+}
