@@ -134,17 +134,26 @@ export async function POST(request: NextRequest) {
         // Receiver is offline, send FCM push notification
         const receiverUser = await User.findById(receiverId);
         if (receiverUser?.fcmToken && messaging) {
-          const senderUser = await User.findById(payload.userId);
+          const senderUser = await User.findById(payload.userId).select('name avatar');
           try {
             await messaging.send({
               token: receiverUser.fcmToken,
               notification: {
                 title: senderUser?.name || 'New Message',
-                body: type === 'image' ? '📷 Image' : content,
+                body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : (content || ''),
               },
               data: {
-                type: 'new_message',
+                type: 'message',
                 senderId: payload.userId,
+                senderName: senderUser?.name || '',
+                senderAvatar: senderUser?.avatar || '',
+              },
+              android: {
+                priority: 'high',
+                notification: {
+                  channelId: 'message_channel_id',
+                  icon: '@mipmap/ic_launcher',
+                },
               },
             });
             console.log(`[FCM] Push notification sent to ${receiverId}`);

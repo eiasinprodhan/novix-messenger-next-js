@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Message from '@/models/Message';
 import Group from '@/models/Group';
+import User from '@/models/User';
 import { getUserFromRequest } from '@/lib/auth';
+import { messaging } from '@/lib/firebase-admin';
+import { isUserOnline } from '@/lib/socket';
 
 // GET group messages
 export async function GET(request: NextRequest) {
@@ -111,6 +114,59 @@ export async function POST(request: NextRequest) {
         });
       }
     } catch (_) {}
+
+    // Send FCM push to offline group members
+    if (messaging) {
+      try {
+        const senderUser = (populated as any).sender as { _id: any; name?: string; avatar?: string } | null;
+        const senderName = senderUser?.name || 'Someone';
+        const senderAvatar = senderUser?.avatar || '';
+        const notifTitle = group.name as string;
+        const notifBody = type === 'image'
+          ? `${senderName}: 📷 Image`
+          : type === 'audio'
+          ? `${senderName}: 🎵 Voice message`
+          : `${senderName}: ${content || ''}`;
+
+        const memberIds: string[] = group.members
+          .map((m: any) => m.user?.toString() ?? m.toString())
+          .filter((id: string) => id !== payload.userId);
+
+        const offlineMembers = memberIds.filter((id) => !isUserOnline(id));
+
+        if (offlineMembers.length > 0) {
+          const memberUsers = await User.find(
+            { _id: { $in: offlineMembers }, fcmToken: { $exists: true, $ne: '' } },
+            'fcmToken'
+          ).lean();
+
+          await Promise.allSettled(
+            memberUsers.map((member: any) =>
+              messaging!.send({
+                token: member.fcmToken,
+                notification: { title: notifTitle, body: notifBody },
+                data: {
+                  type: 'group_message',
+                  groupId,
+                  senderId: payload.userId,
+                  senderName,
+                  senderAvatar,
+                },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    channelId: 'group_message_channel_id',
+                    icon: '@mipmap/ic_launcher',
+                  },
+                },
+              })
+            )
+          );
+        }
+      } catch (fcmErr) {
+        console.error('[FCM] Group message push error:', fcmErr);
+      }
+    }
 
     return NextResponse.json({ success: true, message: populated }, { status: 201 });
   } catch (error) {
