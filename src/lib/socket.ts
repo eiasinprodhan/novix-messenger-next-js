@@ -110,6 +110,85 @@ export function initSocketServer(server: NetServer) {
       console.log('[socket] send_message received (relay-only, REST handles persistence)');
     });
 
+    // THEME CHANGE
+    socket.on('theme_change', async (data: { friendId?: string; groupId?: string; themeId: string; themeType: String; themeName: string }) => {
+      const senderId = socket.data.userId;
+      if (!senderId) return;
+
+      try {
+        await connectDB();
+        const User = (await import('@/models/User')).default;
+        const Message = (await import('@/models/Message')).default;
+        const senderUser = await User.findById(senderId);
+        const senderName = senderUser?.name || 'Someone';
+
+        const themeName = data.themeName || 'Default';
+        const isDefault = data.themeId === 'default' || themeName === 'Default';
+        const actionText = isDefault ? 'disabled the chat theme' : `changed the chat theme to ${themeName}`;
+
+        let systemMsgContent = `${senderName} ${actionText}`;
+
+        if (data.groupId) {
+          const groupRoom = `group:${data.groupId}`;
+          // Save system message to DB
+          const sysMsg = await Message.create({
+            sender: senderId,
+            group: data.groupId,
+            content: systemMsgContent,
+            type: 'text',
+            status: 'sent',
+            readBy: [senderId],
+          });
+          const populated = await sysMsg.populate('sender', 'name username avatar');
+
+          io.to(groupRoom).emit('theme_changed', {
+            groupId: data.groupId,
+            themeId: data.themeId,
+            themeType: data.themeType,
+            themeName: data.themeName,
+            changedBy: senderId,
+            changedByName: senderName,
+          });
+
+          io.to(groupRoom).emit('new_group_message', {
+            message: populated.toObject(),
+            groupId: data.groupId,
+          });
+        } else if (data.friendId) {
+          const room = [senderId, data.friendId].sort().join('_');
+          // Save system message to DB
+          const sysMsg = await Message.create({
+            sender: senderId,
+            receiver: data.friendId,
+            content: systemMsgContent,
+            type: 'text',
+            status: 'sent',
+          });
+          const populated = await sysMsg.populate('sender', 'name username avatar');
+
+          io.to(room).emit('theme_changed', {
+            friendId: data.friendId,
+            themeId: data.themeId,
+            themeType: data.themeType,
+            themeName: data.themeName,
+            changedBy: senderId,
+            changedByName: senderName,
+          });
+
+          io.to(room).emit('new_message', {
+            message: populated.toObject(),
+            from: senderId,
+          });
+          io.to(`user:${data.friendId}`).emit('new_message', {
+            message: populated.toObject(),
+            from: senderId,
+          });
+        }
+      } catch (err) {
+        console.error('Error handling theme_change event:', err);
+      }
+    });
+
     // TYPING
     socket.on('typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;
