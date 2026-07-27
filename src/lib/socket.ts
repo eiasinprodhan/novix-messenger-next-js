@@ -135,7 +135,7 @@ export function initSocketServer(server: NetServer) {
             sender: senderId,
             group: data.groupId,
             content: systemMsgContent,
-            type: 'text',
+            type: 'system',
             status: 'sent',
             readBy: [senderId],
           });
@@ -161,7 +161,7 @@ export function initSocketServer(server: NetServer) {
             sender: senderId,
             receiver: data.friendId,
             content: systemMsgContent,
-            type: 'text',
+            type: 'system',
             status: 'sent',
           });
           const populated = await sysMsg.populate('sender', 'name username avatar');
