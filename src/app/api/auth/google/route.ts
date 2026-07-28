@@ -19,14 +19,22 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
 
+import { getCountryFromRequest } from '@/lib/ipCountry';
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const { idToken, gender, country, birthday } = await request.json();
+    const body = await request.json();
+    let { idToken, gender, country, birthday } = body;
 
     if (!idToken) {
       return NextResponse.json({ error: 'idToken is required' }, { status: 400, headers: corsHeaders() });
+    }
+
+    // Auto-detect country via IP if not explicitly provided
+    if (!country || typeof country !== 'string' || !country.trim()) {
+      country = await getCountryFromRequest(request);
     }
 
     let ticket;
@@ -66,7 +74,7 @@ export async function POST(request: NextRequest) {
         if (!user.avatar && picture) user.avatar = picture;
         // Google verified users are auto-verified
         user.isVerified = true;
-        // Update profile fields if provided
+        // Update profile fields if provided or detected
         if (gender) (user as any).gender = gender;
         if (country) (user as any).country = country.trim();
         if (birthday) (user as any).birthday = new Date(birthday);
@@ -82,11 +90,6 @@ export async function POST(request: NextRequest) {
           suffix++;
         }
 
-        // Check if profile fields are provided
-        if (!gender || !country || !birthday) {
-          requiresProfileCompletion = true;
-        }
-
         user = await User.create({
           name: name || 'Google User',
           username,
@@ -97,8 +100,8 @@ export async function POST(request: NextRequest) {
           isOnline: true,
           lastSeen: new Date(),
           lastActiveAt: new Date(),
+          country: country ? country.trim() : 'United States',
           ...(gender && { gender }),
-          ...(country && { country: country.trim() }),
           ...(birthday && { birthday: new Date(birthday) }),
         });
       }
@@ -109,10 +112,11 @@ export async function POST(request: NextRequest) {
       user.lastActiveAt = new Date();
       // Update profile fields if provided
       if (gender) (user as any).gender = gender;
-      if (country) (user as any).country = country.trim();
+      if (country && (!user.country || user.country === 'Unknown')) (user as any).country = country.trim();
       if (birthday) (user as any).birthday = new Date(birthday);
       await user.save();
     }
+
 
     // Flag if core profile fields are still missing
     const userData = user.toJSON() as any;

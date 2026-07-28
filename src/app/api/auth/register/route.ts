@@ -3,6 +3,8 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateOTP, sendVerificationEmail } from '@/lib/mailer';
 
+import { getCountryFromRequest } from '@/lib/ipCountry';
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -22,10 +24,16 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const { name, username, email, password, gender, country, birthday } = await request.json();
+    const body = await request.json();
+    let { name, username, email, password, gender, country, birthday } = body;
 
-    if (!name || !username || !email || !password || !gender || !country || !birthday) {
-      return NextResponse.json({ error: 'All fields required including gender, country and birthday' }, { status: 400, headers: corsHeaders() });
+    // Auto detect country via IP if not provided
+    if (!country || typeof country !== 'string' || !country.trim()) {
+      country = await getCountryFromRequest(request);
+    }
+
+    if (!name || !username || !email || !password || !gender || !birthday) {
+      return NextResponse.json({ error: 'All fields required including gender and birthday' }, { status: 400, headers: corsHeaders() });
     }
 
     // Validate gender value
@@ -65,6 +73,7 @@ export async function POST(request: NextRequest) {
       verificationCode: code,
       verificationCodeExpires: expires,
     });
+
 
     // Send OTP email (non-blocking background task so Render does not block/timeout)
     sendVerificationEmail(user.email, code)
