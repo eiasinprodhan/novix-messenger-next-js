@@ -35,7 +35,7 @@ export async function DELETE(
         admin: adminUser._id,
         action: 'DELETE_GROUP',
         targetModel: 'Group',
-        targetId: group._id,
+        targetId: group._id.toString(),
         details: { groupName: group.name },
       });
     }
