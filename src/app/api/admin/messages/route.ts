@@ -50,58 +50,90 @@ export async function POST(request: NextRequest) {
           type: 'text',
           status: 'sent',
         });
-        await newMsg.save();
-        sentMessages.push(newMsg);
-        sentCount++;
-      }
-
-      await AuditLog.create({
-        admin: adminSender._id,
-        action: 'ADMIN_BROADCAST_MESSAGE_SENT',
-        details: { totalRecipients: sentCount, contentPreview: content.substring(0, 50) },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: `Broadcast message sent to ${sentCount} users successfully!`,
-        sentCount,
-      });
-
-    } else {
-      // Single direct message to targetUserId
-      if (!targetUserId) {
-        return NextResponse.json({ error: 'Target user ID is required for direct messaging' }, { status: 400 });
-      }
-
-      const recipientUser = await User.findById(targetUserId);
-      if (!recipientUser) {
-        return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
-      }
-
-      const newMsg = new Message({
-        sender: adminSender._id,
-        receiver: recipientUser._id,
-        content: content.trim(),
-        type: 'text',
-        status: 'sent',
-      });
-
       await newMsg.save();
+      const populatedMsg = await newMsg.populate('sender', 'name username avatar');
+      sentMessages.push(populatedMsg);
+      sentCount++;
 
-      await AuditLog.create({
-        admin: adminSender._id,
-        action: 'ADMIN_DIRECT_MESSAGE_SENT',
-        targetType: 'User',
-        targetId: recipientUser._id.toString(),
-        details: { recipientUsername: recipientUser.username, contentPreview: content.substring(0, 50) },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: `Message sent to @${recipientUser.username} successfully!`,
-        messageData: newMsg,
-      });
+      // Socket real-time emit
+      try {
+        const { getIO } = await import('@/lib/socket');
+        const io = getIO();
+        if (io) {
+          io.to(`user:${recipient._id}`).emit('new_message', {
+            message: populatedMsg.toObject(),
+            from: adminSender._id.toString(),
+          });
+        }
+      } catch (e) {}
     }
+
+    await AuditLog.create({
+      admin: adminSender._id,
+      action: 'ADMIN_BROADCAST_MESSAGE_SENT',
+      details: { totalRecipients: sentCount, contentPreview: content.substring(0, 50) },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Broadcast message sent to ${sentCount} users successfully!`,
+      sentCount,
+    });
+
+  } else {
+    // Single direct message to targetUserId
+    if (!targetUserId) {
+      return NextResponse.json({ error: 'Target user ID is required for direct messaging' }, { status: 400 });
+    }
+
+    const recipientUser = await User.findById(targetUserId);
+    if (!recipientUser) {
+      return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
+    }
+
+    const newMsg = new Message({
+      sender: adminSender._id,
+      receiver: recipientUser._id,
+      content: content.trim(),
+      type: 'text',
+      status: 'sent',
+    });
+
+    await newMsg.save();
+    const populatedMsg = await newMsg.populate('sender', 'name username avatar');
+
+    // Real-time socket emit
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        const roomId = [adminSender._id.toString(), recipientUser._id.toString()].sort().join('_');
+        io.to(roomId).emit('new_message', {
+          message: populatedMsg.toObject(),
+          from: adminSender._id.toString(),
+        });
+        io.to(`user:${recipientUser._id}`).emit('new_message', {
+          message: populatedMsg.toObject(),
+          from: adminSender._id.toString(),
+        });
+      }
+    } catch (e) {}
+
+    await AuditLog.create({
+      admin: adminSender._id,
+      action: 'ADMIN_DIRECT_MESSAGE_SENT',
+      targetType: 'User',
+      targetId: recipientUser._id.toString(),
+      details: { recipientUsername: recipientUser.username, contentPreview: content.substring(0, 50) },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Message sent to @${recipientUser.username} successfully!`,
+      messageData: populatedMsg,
+    });
+  }
+
 
   } catch (error: any) {
     console.error('[ADMIN MESSAGE POST ERROR]:', error);
