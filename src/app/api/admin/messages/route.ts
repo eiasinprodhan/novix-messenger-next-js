@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server';
+import connectDB from '@/lib/mongodb';
+import User from '@/models/User';
+import Message from '@/models/Message';
+import AuditLog from '@/models/AuditLog';
+import { getUserFromRequest } from '@/lib/auth';
+
+export async function POST(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const payload = getUserFromRequest(request);
+    
+    // Auth check
+    if (payload) {
+      const requester = await User.findById(payload.userId).select('role');
+      if (!requester || requester.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden. Admin permission required.' }, { status: 403 });
+      }
+    }
+
+    const { targetUserId, isBroadcast, content } = await request.json();
+
+    if (!content || !content.trim()) {
+      return NextResponse.json({ error: 'Message content cannot be empty' }, { status: 400 });
+    }
+
+    // Identify Admin Sender Account
+    let adminSender = payload ? await User.findById(payload.userId) : null;
+    if (!adminSender) {
+      adminSender = await User.findOne({ role: 'admin' });
+    }
+
+    if (!adminSender) {
+      return NextResponse.json({ error: 'No admin user found in database to send message from.' }, { status: 404 });
+    }
+
+    let sentCount = 0;
+    const sentMessages = [];
+
+    if (isBroadcast) {
+      // Send to ALL users except the admin sender
+      const allUsers = await User.find({ _id: { $ne: adminSender._id } }).select('_id');
+      
+      for (const recipient of allUsers) {
+        const newMsg = new Message({
+          sender: adminSender._id,
+          receiver: recipient._id,
+          content: content.trim(),
+          type: 'text',
+          status: 'sent',
+        });
+        await newMsg.save();
+        sentMessages.push(newMsg);
+        sentCount++;
+      }
+
+      await AuditLog.create({
+        admin: adminSender._id,
+        action: 'ADMIN_BROADCAST_MESSAGE_SENT',
+        details: { totalRecipients: sentCount, contentPreview: content.substring(0, 50) },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Broadcast message sent to ${sentCount} users successfully!`,
+        sentCount,
+      });
+
+    } else {
+      // Single direct message to targetUserId
+      if (!targetUserId) {
+        return NextResponse.json({ error: 'Target user ID is required for direct messaging' }, { status: 400 });
+      }
+
+      const recipientUser = await User.findById(targetUserId);
+      if (!recipientUser) {
+        return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
+      }
+
+      const newMsg = new Message({
+        sender: adminSender._id,
+        receiver: recipientUser._id,
+        content: content.trim(),
+        type: 'text',
+        status: 'sent',
+      });
+
+      await newMsg.save();
+
+      await AuditLog.create({
+        admin: adminSender._id,
+        action: 'ADMIN_DIRECT_MESSAGE_SENT',
+        targetType: 'User',
+        targetId: recipientUser._id.toString(),
+        details: { recipientUsername: recipientUser.username, contentPreview: content.substring(0, 50) },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Message sent to @${recipientUser.username} successfully!`,
+        messageData: newMsg,
+      });
+    }
+
+  } catch (error: any) {
+    console.error('[ADMIN MESSAGE POST ERROR]:', error);
+    return NextResponse.json({ error: 'Failed to send admin message', detail: error.message }, { status: 500 });
+  }
+}

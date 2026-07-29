@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, UserPlus, Trash2, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { Search, UserPlus, Trash2, CheckCircle, XCircle, Send, Radio, MessageSquare, AlertCircle } from 'lucide-react';
 
 interface User {
   _id: string;
@@ -28,6 +28,12 @@ export default function AdminUsers() {
   // Modals
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [isDirectMsgOpen, setIsDirectMsgOpen] = useState(false);
+  
+  // Form states
+  const [messageContent, setMessageContent] = useState('');
+  const [msgSending, setMsgSending] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', username: '', email: '', password: '', role: 'user' });
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
@@ -96,6 +102,44 @@ export default function AdminUsers() {
     }
   };
 
+  const handleSendMessage = async (isBroadcast: boolean) => {
+    if (!messageContent.trim()) return;
+    setMsgSending(true);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch('/api/admin/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          isBroadcast,
+          targetUserId: selectedUser?._id,
+          content: messageContent,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setActionSuccess(data.message || 'Message sent successfully!');
+        setMessageContent('');
+        setIsBroadcastOpen(false);
+        setIsDirectMsgOpen(false);
+      } else {
+        setActionError(data.error || 'Failed to send message');
+      }
+    } catch (err) {
+      setActionError('Network error while sending message');
+    } finally {
+      setMsgSending(false);
+    }
+  };
+
   const updateUserRole = async (userId: string, newRole: 'user' | 'admin') => {
     try {
       const token = localStorage.getItem('adminToken');
@@ -161,22 +205,35 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">User Directory</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Control permissions, roles, verification status & accounts</p>
+          <p className="text-slate-500 text-sm mt-0.5">Manage accounts, send direct messages, or broadcast to all users</p>
         </div>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-blue-600/20"
-        >
-          <UserPlus size={18} /> Create Account
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setMessageContent('');
+              setActionError('');
+              setIsBroadcastOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-indigo-600/20"
+          >
+            <Radio size={18} /> Broadcast to All Users
+          </button>
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-blue-600/20"
+          >
+            <UserPlus size={18} /> Create Account
+          </button>
+        </div>
       </div>
 
       {actionSuccess && (
-        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-200 text-sm font-medium">
-          {actionSuccess}
+        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-200 text-sm font-medium flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button onClick={() => setActionSuccess('')} className="text-emerald-500 font-bold">✕</button>
         </div>
       )}
 
@@ -292,6 +349,17 @@ export default function AdminUsers() {
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setMessageContent('');
+                          setActionError('');
+                          setIsDirectMsgOpen(true);
+                        }}
+                        className="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <Send size={13} /> Message
+                      </button>
+                      <button
                         onClick={() => setSelectedUser(user)}
                         className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-lg transition"
                       >
@@ -312,6 +380,124 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+
+      {/* Broadcast Message Modal */}
+      {isBroadcastOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Radio className="text-indigo-600" size={20} />
+                <h3 className="font-bold text-lg text-slate-900">Broadcast Message to All</h3>
+              </div>
+              <button onClick={() => setIsBroadcastOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            {actionError && (
+              <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200 font-medium">
+                {actionError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">
+                This announcement will be delivered as a direct chat message to <strong>every registered user</strong> in the mobile app.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Message Content</label>
+                <textarea
+                  rows={4}
+                  value={messageContent}
+                  onChange={(e) => setMessageContent(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-indigo-500 text-sm"
+                  placeholder="Type your official announcement here..."
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBroadcastOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={msgSending || !messageContent.trim()}
+                  onClick={() => handleSendMessage(true)}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2"
+                >
+                  <Send size={16} /> {msgSending ? 'Sending...' : 'Broadcast Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Single User Message Modal */}
+      {isDirectMsgOpen && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="text-indigo-600" size={20} />
+                <h3 className="font-bold text-lg text-slate-900">Message @{selectedUser.username}</h3>
+              </div>
+              <button onClick={() => setIsDirectMsgOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            {actionError && (
+              <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200 font-medium">
+                {actionError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
+                <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold">
+                  {selectedUser.name[0]}
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900">{selectedUser.name}</div>
+                  <div className="text-slate-500">{selectedUser.email}</div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Message Content</label>
+                <textarea
+                  rows={4}
+                  value={messageContent}
+                  onChange={(e) => setMessageContent(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-indigo-500 text-sm"
+                  placeholder="Type your message to this user..."
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsDirectMsgOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={msgSending || !messageContent.trim()}
+                  onClick={() => handleSendMessage(false)}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2"
+                >
+                  <Send size={16} /> {msgSending ? 'Sending...' : 'Send Message'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -433,7 +619,7 @@ export default function AdminUsers() {
       )}
 
       {/* User Manage Modal */}
-      {selectedUser && (
+      {selectedUser && !isDirectMsgOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4" onClick={() => setSelectedUser(null)}>
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start">
@@ -471,7 +657,19 @@ export default function AdminUsers() {
             </div>
 
             <div className="space-y-2 pt-2">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Role Actions</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Messaging & Role Actions</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setMessageContent('');
+                    setActionError('');
+                    setIsDirectMsgOpen(true);
+                  }}
+                  className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                >
+                  <Send size={13} /> Send Direct Message
+                </button>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => updateUserRole(selectedUser._id, 'admin')}
