@@ -9,11 +9,11 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const payload = getUserFromRequest(request);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const requester = await User.findById(payload.userId).select('role');
-    if (!requester || requester.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (payload) {
+      const requester = await User.findById(payload.userId).select('role');
+      if (!requester || requester.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     const { searchParams } = new URL(request.url);

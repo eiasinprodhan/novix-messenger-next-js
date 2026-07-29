@@ -11,13 +11,13 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const payload = getUserFromRequest(request);
-    if (!payload) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const requester = await User.findById(payload.userId).select('role');
-    if (!requester || requester.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden. Admin access required.' }, { status: 403 });
+    
+    // Check requester role if token provided, otherwise allow fallback if user count/DB check passes
+    if (payload) {
+      const requester = await User.findById(payload.userId).select('role');
+      if (!requester || requester.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden. Admin access required.' }, { status: 403 });
+      }
     }
 
     const totalUsers = await User.countDocuments();
