@@ -79,7 +79,7 @@ export default function AdminLogin() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setEmail ? setPassword(e.target.value) : null}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 font-medium"
                 required
