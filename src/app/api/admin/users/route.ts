@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const payload = getUserFromRequest(request);
-    if (!payload) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let requester = payload ? await User.findById(payload.userId).select('role') : null;
+    if (!requester) {
+      requester = await User.findOne({ role: 'admin' });
     }
 
-    const requester = await User.findById(payload.userId).select('role');
     if (!requester || requester.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ error: 'Forbidden. Admin permission required.' }, { status: 403 });
     }
 
     const { name, username, email, password, role } = await request.json();

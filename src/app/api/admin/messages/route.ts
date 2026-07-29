@@ -67,6 +67,25 @@ export async function POST(request: NextRequest) {
           }
         } catch (e) {}
 
+        // Auto-create/ensure accepted friendship between admin and recipient so message appears in chat list
+        let friendship = await Friendship.findOne({
+          $or: [
+            { requester: adminSender._id, recipient: recipient._id },
+            { requester: recipient._id, recipient: adminSender._id },
+          ],
+        });
+
+        if (!friendship) {
+          await Friendship.create({
+            requester: adminSender._id,
+            recipient: recipient._id,
+            status: 'accepted',
+          });
+        } else if (friendship.status !== 'accepted') {
+          friendship.status = 'accepted';
+          await friendship.save();
+        }
+
         // Unhide chat & clear cache for recipient
         await User.findByIdAndUpdate(recipient._id, { $pull: { hiddenChats: adminSender._id } });
         try {
@@ -126,6 +145,25 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (e) {}
+
+      // Auto-create/ensure accepted friendship between admin and target user so conversation appears in recipient's chat list
+      let friendship = await Friendship.findOne({
+        $or: [
+          { requester: adminSender._id, recipient: recipientUser._id },
+          { requester: recipientUser._id, recipient: adminSender._id },
+        ],
+      });
+
+      if (!friendship) {
+        await Friendship.create({
+          requester: adminSender._id,
+          recipient: recipientUser._id,
+          status: 'accepted',
+        });
+      } else if (friendship.status !== 'accepted') {
+        friendship.status = 'accepted';
+        await friendship.save();
+      }
 
       // Unhide chat for both users and invalidate caches
       await User.findByIdAndUpdate(adminSender._id, { $pull: { hiddenChats: recipientUser._id } });
