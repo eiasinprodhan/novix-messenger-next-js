@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const payload = getUserFromRequest(request);
-    
+
     // Auth check
     if (payload) {
       const requester = await User.findById(payload.userId).select('role');
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (isBroadcast) {
       // Send to ALL users except the admin sender
       const allUsers = await User.find({ _id: { $ne: adminSender._id } }).select('_id');
-      
+
       for (const recipient of allUsers) {
         const newMsg = new Message({
           sender: adminSender._id,
@@ -50,21 +50,23 @@ export async function POST(request: NextRequest) {
           type: 'text',
           status: 'sent',
         });
-      await newMsg.save();
-      const populatedMsg = await newMsg.populate('sender', 'name username avatar');
-      sentMessages.push(populatedMsg);
-      sentCount++;
+        await newMsg.save();
+        const populatedMsg = await newMsg.populate('sender', 'name username avatar');
+        sentMessages.push(populatedMsg);
+        sentCount++;
 
-      // Socket real-time emit
-      try {
-        const { getIO } = await import('@/lib/socket');
-        const io = getIO();
-        if (io) {
-          io.to(`user:${recipient._id}`).emit('new_message', {
-            message: populatedMsg.toObject(),
-            from: adminSender._id.toString(),
-          });
-        }
+        // Socket real-time emit
+        try {
+          const { getIO } = await import('@/lib/socket');
+          const io = getIO();
+          if (io) {
+            io.to(`user:${recipient._id}`).emit('new_message', {
+              message: populatedMsg.toObject(),
+              from: adminSender._id.toString(),
+            });
+          }
+        } catch (e) {}
+
         // Unhide chat & clear cache for recipient
         await User.findByIdAndUpdate(recipient._id, { $pull: { hiddenChats: adminSender._id } });
         try {
@@ -74,56 +76,56 @@ export async function POST(request: NextRequest) {
         } catch (e) {}
       }
 
-    await AuditLog.create({
-      admin: adminSender._id,
-      action: 'ADMIN_BROADCAST_MESSAGE_SENT',
-      details: { totalRecipients: sentCount, contentPreview: content.substring(0, 50) },
-    });
+      await AuditLog.create({
+        admin: adminSender._id,
+        action: 'ADMIN_BROADCAST_MESSAGE_SENT',
+        details: { totalRecipients: sentCount, contentPreview: content.substring(0, 50) },
+      });
 
-    return NextResponse.json({
-      success: true,
-      message: `Broadcast message sent to ${sentCount} users successfully!`,
-      sentCount,
-    });
+      return NextResponse.json({
+        success: true,
+        message: `Broadcast message sent to ${sentCount} users successfully!`,
+        sentCount,
+      });
 
-  } else {
-    // Single direct message to targetUserId
-    if (!targetUserId) {
-      return NextResponse.json({ error: 'Target user ID is required for direct messaging' }, { status: 400 });
-    }
-
-    const recipientUser = await User.findById(targetUserId);
-    if (!recipientUser) {
-      return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
-    }
-
-    const newMsg = new Message({
-      sender: adminSender._id,
-      receiver: recipientUser._id,
-      content: content.trim(),
-      type: 'text',
-      status: 'sent',
-    });
-
-    await newMsg.save();
-    const populatedMsg = await newMsg.populate('sender', 'name username avatar');
-
-    // Real-time socket emit
-    try {
-      const { getIO } = await import('@/lib/socket');
-      const io = getIO();
-      if (io) {
-        const roomId = [adminSender._id.toString(), recipientUser._id.toString()].sort().join('_');
-        io.to(roomId).emit('new_message', {
-          message: populatedMsg.toObject(),
-          from: adminSender._id.toString(),
-        });
-        io.to(`user:${recipientUser._id}`).emit('new_message', {
-          message: populatedMsg.toObject(),
-          from: adminSender._id.toString(),
-        });
+    } else {
+      // Single direct message to targetUserId
+      if (!targetUserId) {
+        return NextResponse.json({ error: 'Target user ID is required for direct messaging' }, { status: 400 });
       }
-    } catch (e) {}
+
+      const recipientUser = await User.findById(targetUserId);
+      if (!recipientUser) {
+        return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
+      }
+
+      const newMsg = new Message({
+        sender: adminSender._id,
+        receiver: recipientUser._id,
+        content: content.trim(),
+        type: 'text',
+        status: 'sent',
+      });
+
+      await newMsg.save();
+      const populatedMsg = await newMsg.populate('sender', 'name username avatar');
+
+      // Real-time socket emit
+      try {
+        const { getIO } = await import('@/lib/socket');
+        const io = getIO();
+        if (io) {
+          const roomId = [adminSender._id.toString(), recipientUser._id.toString()].sort().join('_');
+          io.to(roomId).emit('new_message', {
+            message: populatedMsg.toObject(),
+            from: adminSender._id.toString(),
+          });
+          io.to(`user:${recipientUser._id}`).emit('new_message', {
+            message: populatedMsg.toObject(),
+            from: adminSender._id.toString(),
+          });
+        }
+      } catch (e) {}
 
       // Unhide chat for both users and invalidate caches
       await User.findByIdAndUpdate(adminSender._id, { $pull: { hiddenChats: recipientUser._id } });
@@ -149,8 +151,7 @@ export async function POST(request: NextRequest) {
         message: `Message sent to @${recipientUser.username} successfully!`,
         messageData: populatedMsg,
       });
-  }
-
+    }
 
   } catch (error: any) {
     console.error('[ADMIN MESSAGE POST ERROR]:', error);
