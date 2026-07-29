@@ -74,34 +74,62 @@ export default function AdminLogs() {
                 </td>
               </tr>
             ) : (
-              logs.map((log) => (
-                <tr key={log._id} className="hover:bg-slate-50/80 transition">
-                  <td className="p-4 text-xs text-slate-500 font-mono">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-blue-600 text-white rounded-md flex items-center justify-center font-bold text-xs">
-                        {log.admin?.name?.[0] || 'A'}
+              logs.map((log) => {
+                const actionLabel = log.action.replace(/_/g, ' ');
+                const isCreated = log.action.includes('CREATED');
+                const isDeleted = log.action.includes('DELETED');
+
+                const targetName = log.details?.recipientUsername
+                  ? `@${log.details.recipientUsername}`
+                  : log.details?.username
+                  ? `@${log.details.username}`
+                  : log.targetType || 'System';
+
+                return (
+                  <tr key={log._id} className="hover:bg-slate-50/80 transition">
+                    <td className="p-4 text-xs text-slate-500 font-medium">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-xs shadow-xs">
+                          {log.admin?.name?.[0] || 'A'}
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-900 font-bold">{log.admin?.name || 'System Admin'}</div>
+                          <div className="text-[11px] text-slate-400">@{log.admin?.username || 'admin'}</div>
+                        </div>
                       </div>
-                      <span className="text-xs text-slate-900 font-semibold">{log.admin?.name || 'System Admin'}</span>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-mono font-bold">
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="p-4 text-xs text-slate-500 font-mono">
-                    {log.targetType || 'System'} {log.targetId ? `(${log.targetId.substring(0, 8)}...)` : ''}
-                  </td>
-                  <td className="p-4 text-xs text-slate-500">
-                    <pre className="bg-slate-50 p-2 rounded-lg border border-slate-200 text-[11px] font-mono max-w-xs truncate overflow-hidden text-slate-800">
-                      {JSON.stringify(log.details || {})}
-                    </pre>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide ${
+                        isCreated ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        isDeleted ? 'bg-red-50 text-red-700 border border-red-200' :
+                        'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      }`}>
+                        {actionLabel}
+                      </span>
+                    </td>
+                    <td className="p-4 text-xs">
+                      <div className="font-semibold text-slate-900">{targetName}</div>
+                      {log.targetType && <div className="text-[11px] text-slate-400">{log.targetType}</div>}
+                    </td>
+                    <td className="p-4 text-xs">
+                      {log.details && typeof log.details === 'object' ? (
+                        <div className="flex flex-wrap gap-1.5 max-w-sm">
+                          {Object.entries(log.details).map(([key, val]) => (
+                            <span key={key} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded-md text-[11px] text-slate-700 font-medium">
+                              <span className="text-slate-400 font-normal">{key}:</span> {String(val)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">{log.details || '-'}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

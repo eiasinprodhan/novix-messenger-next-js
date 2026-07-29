@@ -22,10 +22,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid recipient' }, { status: 400 });
     }
 
-    // Check if recipient exists
+    // Check if recipient exists or is admin
     const recipient = await User.findById(recipientId);
     if (!recipient) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const sender = await User.findById(payload.userId);
+    if (recipient.role === 'admin' || sender?.role === 'admin') {
+      return NextResponse.json({ error: 'Admin accounts cannot send or receive friend requests.' }, { status: 400 });
     }
 
     // Check existing friendship

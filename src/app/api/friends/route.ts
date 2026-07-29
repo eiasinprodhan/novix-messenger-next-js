@@ -43,13 +43,16 @@ export async function GET(request: NextRequest) {
     }
 
     let friendships = await Friendship.find(query)
-      .populate('requester', 'name username avatar isOnline lastSeen')
-      .populate('recipient', 'name username avatar isOnline lastSeen')
+      .populate('requester', 'name username avatar isOnline lastSeen role')
+      .populate('recipient', 'name username avatar isOnline lastSeen role')
       .sort({ createdAt: -1 });
 
+    // Filter out friendships where either user has role 'admin'
     const results = await Promise.all(friendships.map(async (f: any) => {
+      if (!f.requester || !f.recipient) return null;
       const isRequester = f.requester._id.toString() === payload.userId;
       const otherUser = isRequester ? f.recipient : f.requester;
+      const isAdminChat = otherUser.role === 'admin';
 
       // Get last message for this friendship
       const lastMessage = await Message.findOne({
@@ -61,6 +64,9 @@ export async function GET(request: NextRequest) {
       })
         .sort({ createdAt: -1 })
         .select('content createdAt sender type imageUrl status');
+
+      // For admin chats: only include if there's at least one message
+      if (isAdminChat && !lastMessage) return null;
 
       // Get unread message count (sent by otherUser to current user and status is not read)
       const unreadCount = await Message.countDocuments({
@@ -74,6 +80,7 @@ export async function GET(request: NextRequest) {
         _id: f._id,
         status: f.status,
         createdAt: f.createdAt,
+        isAdminChat,
         otherUser: {
           _id: otherUser._id,
           name: otherUser.name,
@@ -81,6 +88,7 @@ export async function GET(request: NextRequest) {
           avatar: otherUser.avatar,
           isOnline: otherUser.isOnline,
           lastSeen: otherUser.lastSeen,
+          role: otherUser.role,
         },
         lastMessage: lastMessage
           ? {
@@ -96,15 +104,18 @@ export async function GET(request: NextRequest) {
       };
     }));
 
+    // Remove null entries (admin chats with no messages, or missing users)
+    const validResults = results.filter((r) => r !== null);
+
     let finalResponse;
     // For 'friends' type, filter out chats the user has hidden (deleted from their view)
     if (type === 'friends' && !includeHidden) {
       const currentUser = await User.findById(payload.userId).select('hiddenChats');
       const hiddenIds = (currentUser?.hiddenChats ?? []).map((id: any) => id.toString());
-      const filtered = results.filter((r) => !hiddenIds.includes(r.otherUser._id.toString()));
+      const filtered = validResults.filter((r: any) => !hiddenIds.includes(r.otherUser._id.toString()));
       finalResponse = { friendships: filtered };
     } else {
-      finalResponse = { friendships: results };
+      finalResponse = { friendships: validResults };
     }
 
     await setCache(cacheKey, finalResponse, 300);

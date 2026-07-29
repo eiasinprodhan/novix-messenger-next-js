@@ -164,9 +164,37 @@ export default function AdminDashboard() {
           ) : (
             <div className="space-y-3">
               {recentLogs.map((log) => {
-                const isCreated = log.action === 'USER_CREATED';
-                const isDeleted = log.action === 'USER_DELETED';
-                const isUpdated = log.action === 'USER_UPDATED';
+                const isCreated = log.action.includes('CREATED');
+                const isDeleted = log.action.includes('DELETED');
+                const actionLabel = log.action.replace(/_/g, ' ');
+
+                // Extract human readable details
+                let detailText = '';
+                if (log.details) {
+                  if (typeof log.details === 'string') {
+                    detailText = log.details;
+                  } else if (log.details.contentPreview) {
+                    detailText = `"${log.details.contentPreview}"`;
+                  } else if (log.details.username) {
+                    detailText = `@${log.details.username}`;
+                  } else if (log.details.recipientUsername) {
+                    detailText = `To @${log.details.recipientUsername}`;
+                  } else if (log.details.totalRecipients) {
+                    detailText = `Recipients: ${log.details.totalRecipients}`;
+                  } else {
+                    detailText = Object.entries(log.details)
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join(', ');
+                  }
+                }
+
+                const targetDisplay = log.targetUser
+                  ? `${log.targetUser.name} (@${log.targetUser.username})`
+                  : log.details?.recipientUsername
+                  ? `@${log.details.recipientUsername}`
+                  : log.details?.username
+                  ? `@${log.details.username}`
+                  : log.targetType || 'System';
 
                 return (
                   <div key={log._id} className="flex items-center justify-between p-3.5 bg-slate-50/80 hover:bg-slate-100/70 rounded-xl border border-slate-200/60 transition">
@@ -180,22 +208,18 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <div className="font-semibold text-xs text-slate-900 flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold ${
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-bold ${
                             isCreated ? 'bg-emerald-100 text-emerald-800' :
                             isDeleted ? 'bg-red-100 text-red-800' :
                             'bg-blue-100 text-blue-800'
                           }`}>
-                            {log.action.replace('_', ' ')}
+                            {actionLabel}
                           </span>
                           <span className="text-slate-500 font-normal">• {log.admin?.name || 'System Admin'}</span>
                         </div>
-                        <div className="text-xs text-slate-600 mt-1 font-mono">
-                          Target: {log.targetType || 'User'} ({log.targetId ? log.targetId.substring(0, 10) + '...' : ''})
-                          {log.details && (
-                            <span className="ml-2 text-slate-400 text-[11px]">
-                              {JSON.stringify(log.details)}
-                            </span>
-                          )}
+                        <div className="text-xs text-slate-700 mt-1">
+                          <strong className="font-semibold text-slate-900">{targetDisplay}</strong>
+                          {detailText && <span className="ml-2 text-slate-500">• {detailText}</span>}
                         </div>
                       </div>
                     </div>
