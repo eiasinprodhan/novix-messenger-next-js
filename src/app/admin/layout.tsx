@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, BarChart3, Shield, LogOut, Flag, FileText, ChevronRight } from 'lucide-react';
+import { Users, BarChart3, Shield, LogOut, Flag, FileText, ChevronRight, Users2 } from 'lucide-react';
 
 export default function AdminLayout({
   children,
@@ -60,6 +60,7 @@ export default function AdminLayout({
   const navItems = [
     { label: 'Dashboard', href: '/admin', icon: BarChart3 },
     { label: 'Users', href: '/admin/users', icon: Users },
+    { label: 'Groups', href: '/admin/groups', icon: Users2 },
     { label: 'Reports', href: '/admin/reports', icon: Flag },
     { label: 'Audit Logs', href: '/admin/logs', icon: FileText },
   ];

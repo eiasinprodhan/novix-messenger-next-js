@@ -4,6 +4,7 @@ const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 let redis: Redis | null = null;
 let isRedisAvailable = false;
+let hasLoggedError = false;
 
 try {
   redis = new Redis(redisUrl, {
@@ -11,26 +12,36 @@ try {
     connectTimeout: 500, // reduce connect timeout to 500ms for faster failover
     enableOfflineQueue: false, // fail instantly if offline instead of queuing commands
     retryStrategy(times) {
-      if (times > 3) {
+      if (times > 2) {
         isRedisAvailable = false;
-        console.warn('⚠️ Redis is unreachable. Falling back to MongoDB.');
+        if (!hasLoggedError) {
+          console.warn('⚠️ Redis is unreachable. Falling back to MongoDB.');
+          hasLoggedError = true;
+        }
         return null;
       }
-      return Math.min(times * 100, 1000);
+      return 2000;
     },
   });
 
   redis.on('connect', () => {
     isRedisAvailable = true;
+    hasLoggedError = false;
     console.log('📡 Redis connection established successfully.');
   });
 
   redis.on('error', (err) => {
     isRedisAvailable = false;
-    console.warn('⚠️ Redis Connection Error:', err.message);
+    if (!hasLoggedError) {
+      console.warn('⚠️ Redis connection unavailable (using MongoDB fallback):', err.message);
+      hasLoggedError = true;
+    }
   });
 } catch (error) {
-  console.error('⚠️ Failed to initialize Redis client:', error);
+  if (!hasLoggedError) {
+    console.warn('⚠️ Redis not configured, falling back to MongoDB.');
+    hasLoggedError = true;
+  }
   redis = null;
 }
 
