@@ -4,6 +4,9 @@ import User from '@/models/User';
 import Message from '@/models/Message';
 import Friendship from '@/models/Friendship';
 import Report from '@/models/Report';
+import AuditLog from '@/models/AuditLog';
+import Group from '@/models/Group';
+import Story from '@/models/Story';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -12,7 +15,6 @@ export async function GET(request: NextRequest) {
 
     const payload = getUserFromRequest(request);
     
-    // Check requester role if token provided, otherwise allow fallback if user count/DB check passes
     if (payload) {
       const requester = await User.findById(payload.userId).select('role');
       if (!requester || requester.role !== 'admin') {
@@ -20,22 +22,34 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Comprehensive Stats
     const totalUsers = await User.countDocuments();
     const onlineUsers = await User.countDocuments({ isOnline: true });
     const verifiedUsers = await User.countDocuments({ isVerified: true });
+    const adminCount = await User.countDocuments({ role: 'admin' });
     
     const totalMessages = await Message.countDocuments();
     const totalFriendships = await Friendship.countDocuments({ status: 'accepted' });
     const pendingFriendRequests = await Friendship.countDocuments({ status: 'pending' });
 
+    const totalGroups = Group ? await Group.countDocuments() : 0;
+    const totalStories = Story ? await Story.countDocuments() : 0;
+
     const totalReports = await Report.countDocuments();
     const pendingReports = await Report.countDocuments({ status: 'pending' });
+    const resolvedReports = await Report.countDocuments({ status: 'resolved' });
 
     // Recent 5 users
     const recentUsers = await User.find()
       .select('name username email avatar isOnline role lastSeen createdAt')
       .sort({ createdAt: -1 })
-      .limit(5);
+      .limit(6);
+
+    // Recent 6 audit logs (added, deleted, updated)
+    const recentLogs = await AuditLog.find()
+      .populate('admin', 'name username email')
+      .sort({ createdAt: -1 })
+      .limit(6);
 
     // Recent 5 reports
     const recentReports = await Report.find()
@@ -49,13 +63,18 @@ export async function GET(request: NextRequest) {
         totalUsers,
         onlineUsers,
         verifiedUsers,
+        adminCount,
         totalMessages,
         totalFriendships,
         pendingFriendRequests,
+        totalGroups,
+        totalStories,
         totalReports,
         pendingReports,
+        resolvedReports,
       },
       recentUsers,
+      recentLogs,
       recentReports,
     });
   } catch (error: any) {
