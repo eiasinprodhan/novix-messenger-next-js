@@ -65,8 +65,14 @@ export async function POST(request: NextRequest) {
             from: adminSender._id.toString(),
           });
         }
-      } catch (e) {}
-    }
+        // Unhide chat & clear cache for recipient
+        await User.findByIdAndUpdate(recipient._id, { $pull: { hiddenChats: adminSender._id } });
+        try {
+          const { invalidateFriendsCache, invalidateChatCache } = await import('@/lib/redis');
+          await invalidateFriendsCache(recipient._id.toString());
+          await invalidateChatCache(adminSender._id.toString(), recipient._id.toString());
+        } catch (e) {}
+      }
 
     await AuditLog.create({
       admin: adminSender._id,
@@ -119,19 +125,30 @@ export async function POST(request: NextRequest) {
       }
     } catch (e) {}
 
-    await AuditLog.create({
-      admin: adminSender._id,
-      action: 'ADMIN_DIRECT_MESSAGE_SENT',
-      targetType: 'User',
-      targetId: recipientUser._id.toString(),
-      details: { recipientUsername: recipientUser.username, contentPreview: content.substring(0, 50) },
-    });
+      // Unhide chat for both users and invalidate caches
+      await User.findByIdAndUpdate(adminSender._id, { $pull: { hiddenChats: recipientUser._id } });
+      await User.findByIdAndUpdate(recipientUser._id, { $pull: { hiddenChats: adminSender._id } });
 
-    return NextResponse.json({
-      success: true,
-      message: `Message sent to @${recipientUser.username} successfully!`,
-      messageData: populatedMsg,
-    });
+      try {
+        const { invalidateFriendsCache, invalidateChatCache } = await import('@/lib/redis');
+        await invalidateFriendsCache(adminSender._id.toString());
+        await invalidateFriendsCache(recipientUser._id.toString());
+        await invalidateChatCache(adminSender._id.toString(), recipientUser._id.toString());
+      } catch (e) {}
+
+      await AuditLog.create({
+        admin: adminSender._id,
+        action: 'ADMIN_DIRECT_MESSAGE_SENT',
+        targetType: 'User',
+        targetId: recipientUser._id.toString(),
+        details: { recipientUsername: recipientUser.username, contentPreview: content.substring(0, 50) },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Message sent to @${recipientUser.username} successfully!`,
+        messageData: populatedMsg,
+      });
   }
 
 

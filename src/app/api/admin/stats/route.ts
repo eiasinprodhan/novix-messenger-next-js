@@ -22,25 +22,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Comprehensive Stats
-    const totalUsers = await User.countDocuments();
-    const onlineUsers = await User.countDocuments({ isOnline: true });
-    const verifiedUsers = await User.countDocuments({ isVerified: true });
+    // Non-admin stats calculations
+    const totalRegularUsers = await User.countDocuments({ role: { $ne: 'admin' } });
+    const onlineRegularUsers = await User.countDocuments({ role: { $ne: 'admin' }, isOnline: true });
+    const verifiedRegularUsers = await User.countDocuments({ role: { $ne: 'admin' }, isVerified: true });
     const adminCount = await User.countDocuments({ role: 'admin' });
-    
-    const totalMessages = await Message.countDocuments();
+
+    // Fetch admin user IDs to filter out admin messages if needed
+    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminUserIds = adminUsers.map((u) => u._id);
+
+    const totalMessages = await Message.countDocuments({
+      sender: { $nin: adminUserIds },
+    });
+
     const totalFriendships = await Friendship.countDocuments({ status: 'accepted' });
     const pendingFriendRequests = await Friendship.countDocuments({ status: 'pending' });
 
     const totalGroups = Group ? await Group.countDocuments() : 0;
-    const totalStories = Story ? await Story.countDocuments() : 0;
+    const totalStories = Story ? await Story.countDocuments({ user: { $nin: adminUserIds } }) : 0;
 
     const totalReports = await Report.countDocuments();
     const pendingReports = await Report.countDocuments({ status: 'pending' });
     const resolvedReports = await Report.countDocuments({ status: 'resolved' });
 
-    // Recent 5 users
-    const recentUsers = await User.find()
+    // Recent 6 regular non-admin users
+    const recentUsers = await User.find({ role: { $ne: 'admin' } })
       .select('name username email avatar isOnline role lastSeen createdAt')
       .sort({ createdAt: -1 })
       .limit(6);
@@ -60,9 +67,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       stats: {
-        totalUsers,
-        onlineUsers,
-        verifiedUsers,
+        totalUsers: totalRegularUsers,
+        onlineUsers: onlineRegularUsers,
+        verifiedUsers: verifiedRegularUsers,
         adminCount,
         totalMessages,
         totalFriendships,
