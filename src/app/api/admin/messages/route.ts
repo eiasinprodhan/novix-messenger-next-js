@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Message from '@/models/Message';
+import Friendship from '@/models/Friendship';
 import AuditLog from '@/models/AuditLog';
 import { getUserFromRequest } from '@/lib/auth';
 
