@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, UserPlus, Trash2, Shield, CheckCircle, XCircle, AlertCircle, Edit2 } from 'lucide-react';
+import { Search, UserPlus, Trash2, CheckCircle, XCircle, Shield } from 'lucide-react';
 
 interface User {
   _id: string;
@@ -25,7 +25,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Modals state
+  // Modals
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', username: '', email: '', password: '', role: 'user' });
@@ -163,19 +163,19 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">User Management</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">Control permissions, roles, verification status & accounts</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">User Directory</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Control permissions, roles, verification status & accounts</p>
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="btn bg-blue-600 hover:bg-blue-500 text-white text-sm flex items-center gap-2 px-4 py-2 rounded-xl transition font-medium"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-blue-600/20"
         >
           <UserPlus size={18} /> Create Account
         </button>
       </div>
 
       {actionSuccess && (
-        <div className="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl border border-emerald-500/20 text-sm">
+        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-200 text-sm font-medium">
           {actionSuccess}
         </div>
       )}
@@ -189,11 +189,11 @@ export default function AdminUsers() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, username, or email..."
-              className="input pl-10 bg-zinc-900/60 border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 w-full rounded-xl"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-xs"
             />
-            <Search className="absolute left-3.5 top-3.5 text-zinc-500" size={18} />
+            <Search className="absolute left-3.5 top-3 text-slate-400" size={18} />
           </div>
-          <button type="submit" className="btn bg-zinc-800 hover:bg-zinc-700 text-white px-5 rounded-xl text-sm font-medium">
+          <button type="submit" className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition">
             Search
           </button>
         </form>
@@ -204,7 +204,7 @@ export default function AdminUsers() {
             setRoleFilter(e.target.value);
             setPage(1);
           }}
-          className="bg-zinc-900/60 border border-zinc-800 text-white px-4 py-2 rounded-xl text-sm focus:border-blue-500 outline-none"
+          className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-blue-500 shadow-xs"
         >
           <option value="">All Roles</option>
           <option value="user">User</option>
@@ -213,9 +213,9 @@ export default function AdminUsers() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-zinc-950/60 border-b border-zinc-800/80 text-zinc-400 text-xs uppercase font-medium">
+          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
             <tr>
               <th className="p-4">User</th>
               <th className="p-4">Role</th>
@@ -225,41 +225,41 @@ export default function AdminUsers() {
               <th className="p-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
+          <tbody className="divide-y divide-slate-100 text-slate-700">
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-zinc-500">
+                <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                   Fetching users database...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-zinc-500">
+                <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                   No matching users found.
                 </td>
               </tr>
             ) : (
               users.map((user) => (
-                <tr key={user._id} className="hover:bg-zinc-800/30 transition">
+                <tr key={user._id} className="hover:bg-slate-50/80 transition">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-zinc-800 rounded-xl overflow-hidden flex items-center justify-center text-base font-semibold text-white shrink-0">
-                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.name[0]}
+                      <div className="w-10 h-10 bg-blue-600 rounded-xl text-white flex items-center justify-center font-bold text-sm shrink-0">
+                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-xl" alt="" /> : user.name[0]}
                       </div>
                       <div>
-                        <div className="font-medium text-white flex items-center gap-1.5">
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                           {user.name}
                         </div>
-                        <div className="text-xs text-zinc-400">@{user.username} • {user.email}</div>
+                        <div className="text-xs text-slate-500">@{user.username} • {user.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="p-4">
                     <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
                         user.role === 'admin'
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                          : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/40'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {user.role}
@@ -268,10 +268,10 @@ export default function AdminUsers() {
                   <td className="p-4">
                     <button
                       onClick={() => toggleVerification(user._id, user.isVerified)}
-                      className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border transition ${
+                      className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg transition border ${
                         user.isVerified
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                          : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                       }`}
                     >
                       {user.isVerified ? <CheckCircle size={14} /> : <XCircle size={14} />}
@@ -280,26 +280,26 @@ export default function AdminUsers() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${user.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-                      <span className={`text-xs ${user.isOnline ? 'text-emerald-400 font-medium' : 'text-zinc-500'}`}>
+                      <div className={`w-2.5 h-2.5 rounded-full ${user.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                      <span className={`text-xs font-medium ${user.isOnline ? 'text-emerald-700' : 'text-slate-500'}`}>
                         {user.isOnline ? 'Online' : 'Offline'}
                       </span>
                     </div>
                   </td>
-                  <td className="p-4 text-xs text-zinc-400">
+                  <td className="p-4 text-xs text-slate-500">
                     {new Date(user.createdAt).toLocaleDateString()}
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => setSelectedUser(user)}
-                        className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition"
+                        className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-lg transition"
                       >
                         Manage
                       </button>
                       <button
                         onClick={() => deleteUser(user._id, user.name)}
-                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                        className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition"
                         title="Delete User"
                       >
                         <Trash2 size={16} />
@@ -315,20 +315,20 @@ export default function AdminUsers() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-zinc-400">
+        <div className="flex items-center justify-between text-sm text-slate-500 font-medium">
           <div>Page {page} of {totalPages}</div>
           <div className="flex gap-2">
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white rounded-xl transition text-xs font-medium"
+              className="px-4 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 text-slate-700 rounded-xl transition text-xs font-semibold"
             >
               Previous
             </button>
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white rounded-xl transition text-xs font-medium"
+              className="px-4 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 text-slate-700 rounded-xl transition text-xs font-semibold"
             >
               Next
             </button>
@@ -338,74 +338,74 @@ export default function AdminUsers() {
 
       {/* Create User Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
-              <h3 className="font-semibold text-lg text-white">Create New Account</h3>
-              <button onClick={() => setIsCreateOpen(false)} className="text-zinc-500 hover:text-white">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-lg text-slate-900">Create New Account</h3>
+              <button onClick={() => setIsCreateOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
             {actionError && (
-              <div className="bg-red-500/10 text-red-400 text-xs p-3 rounded-xl border border-red-500/20">
+              <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200 font-medium">
                 {actionError}
               </div>
             )}
 
-            <form onSubmit={handleCreateUser} className="space-y-3 text-sm">
+            <form onSubmit={handleCreateUser} className="space-y-3.5 text-sm">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
                 <input
                   type="text"
                   required
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="input bg-zinc-950 border-zinc-800 text-white w-full rounded-xl"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-blue-500"
                   placeholder="John Doe"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Username</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Username</label>
                 <input
                   type="text"
                   required
                   value={newUser.username}
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  className="input bg-zinc-950 border-zinc-800 text-white w-full rounded-xl"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-blue-500"
                   placeholder="johndoe"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Email Address</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
                 <input
                   type="email"
                   required
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="input bg-zinc-950 border-zinc-800 text-white w-full rounded-xl"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-blue-500"
                   placeholder="john@example.com"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Password</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
                 <input
                   type="password"
                   required
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="input bg-zinc-950 border-zinc-800 text-white w-full rounded-xl"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-blue-500"
                   placeholder="••••••••"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Role</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Role</label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="bg-zinc-950 border border-zinc-800 text-white w-full p-2.5 rounded-xl outline-none"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500"
                 >
                   <option value="user">User</option>
                   <option value="admin">Administrator</option>
@@ -416,13 +416,13 @@ export default function AdminUsers() {
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-medium"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition"
                 >
                   Create User
                 </button>
@@ -434,68 +434,68 @@ export default function AdminUsers() {
 
       {/* User Manage Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedUser(null)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4" onClick={() => setSelectedUser(null)}>
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center text-xl font-semibold text-white overflow-hidden">
+                <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center text-xl font-bold overflow-hidden shadow-xs">
                   {selectedUser.avatar ? <img src={selectedUser.avatar} className="w-full h-full object-cover" alt="" /> : selectedUser.name[0]}
                 </div>
                 <div>
-                  <div className="font-semibold text-white text-base">{selectedUser.name}</div>
-                  <div className="text-xs text-zinc-400">@{selectedUser.username}</div>
+                  <div className="font-bold text-slate-900 text-base">{selectedUser.name}</div>
+                  <div className="text-xs text-slate-500">@{selectedUser.username}</div>
                 </div>
               </div>
-              <button onClick={() => setSelectedUser(null)} className="text-zinc-500 hover:text-white">✕</button>
+              <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
-            <div className="space-y-3 text-xs bg-zinc-950/60 p-4 rounded-xl border border-zinc-800/50">
+            <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
               <div className="flex justify-between">
-                <span className="text-zinc-400">Email:</span>
-                <span className="text-zinc-200 font-medium">{selectedUser.email}</span>
+                <span className="text-slate-500">Email:</span>
+                <span className="text-slate-900 font-semibold">{selectedUser.email}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-400">Current Role:</span>
-                <span className="text-blue-400 uppercase font-semibold">{selectedUser.role}</span>
+                <span className="text-slate-500">Role:</span>
+                <span className="text-blue-600 uppercase font-bold">{selectedUser.role}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-400">Verification:</span>
-                <span className={selectedUser.isVerified ? 'text-emerald-400 font-medium' : 'text-amber-400'}>
+                <span className="text-slate-500">Verification:</span>
+                <span className={selectedUser.isVerified ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
                   {selectedUser.isVerified ? 'Verified' : 'Unverified'}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-400">Joined:</span>
-                <span className="text-zinc-300">{new Date(selectedUser.createdAt).toLocaleDateString()}</span>
+                <span className="text-slate-500">Joined:</span>
+                <span className="text-slate-700">{new Date(selectedUser.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
 
             <div className="space-y-2 pt-2">
-              <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Role Actions</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Role Actions</div>
               <div className="flex gap-2">
                 <button
                   onClick={() => updateUserRole(selectedUser._id, 'admin')}
                   disabled={selectedUser.role === 'admin'}
-                  className="flex-1 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-medium disabled:opacity-40"
+                  className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold disabled:opacity-40 transition"
                 >
                   Make Admin
                 </button>
                 <button
                   onClick={() => updateUserRole(selectedUser._id, 'user')}
                   disabled={selectedUser.role === 'user'}
-                  className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium disabled:opacity-40"
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold disabled:opacity-40 transition"
                 >
                   Demote to User
                 </button>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-zinc-800 flex gap-2">
+            <div className="pt-3 border-t border-slate-100">
               <button
                 onClick={() => deleteUser(selectedUser._id, selectedUser.name)}
-                className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-semibold flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
               >
-                <Trash2 size={16} /> Delete Account
+                <Trash2 size={16} /> Permanently Delete Account
               </button>
             </div>
           </div>

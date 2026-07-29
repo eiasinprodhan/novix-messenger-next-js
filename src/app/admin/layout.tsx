@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, BarChart3, Shield, LogOut, Flag, FileText } from 'lucide-react';
+import { Users, BarChart3, Shield, LogOut, Flag, FileText, ChevronRight } from 'lucide-react';
 
 export default function AdminLayout({
   children,
@@ -51,8 +51,8 @@ export default function AdminLayout({
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950 text-zinc-400 text-sm">
-        Authenticating admin portal...
+      <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-500 text-sm font-medium">
+        Authenticating admin session...
       </div>
     );
   }
@@ -65,22 +65,25 @@ export default function AdminLayout({
   ];
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <div className="flex h-screen bg-slate-100/70 text-slate-800 font-sans selection:bg-blue-500 selection:text-white">
       {/* Sidebar */}
-      <div className="w-64 bg-zinc-900/60 border-r border-zinc-800/80 flex flex-col">
-        <div className="p-5 border-b border-zinc-800/80 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-600/30">
+      <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col shadow-xs">
+        {/* Logo Header */}
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <Link href="/admin" className="flex items-center gap-3 group">
+            <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20 text-lg group-hover:scale-105 transition">
               N
             </div>
             <div>
-              <div className="font-semibold text-sm tracking-tight text-white">Novix</div>
-              <div className="text-[10px] text-blue-400 font-mono tracking-wider font-semibold">ADMIN CONTROL</div>
+              <div className="font-bold text-slate-900 text-base tracking-tight leading-tight">Novix</div>
+              <div className="text-[10px] text-blue-600 font-semibold tracking-wider uppercase">Admin Portal</div>
             </div>
-          </div>
+          </Link>
         </div>
 
+        {/* Navigation */}
         <nav className="p-3 flex-1 space-y-1">
+          <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Management</div>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -88,56 +91,60 @@ export default function AdminLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                   isActive
-                    ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    ? 'bg-blue-50 text-blue-600 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                <Icon size={18} />
-                <span>{item.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon size={18} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                  <span>{item.label}</span>
+                </div>
+                {isActive && <ChevronRight size={14} className="text-blue-600" />}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-zinc-800/80">
-          <div className="flex items-center gap-3 px-2 py-2 bg-zinc-950/40 rounded-xl border border-zinc-800/50">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 font-semibold flex items-center justify-center text-xs">
+        {/* User Card & Logout */}
+        <div className="p-4 border-t border-slate-100">
+          <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-2xl border border-slate-200/60">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
               {adminUser?.name?.[0] || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-white truncate">{adminUser?.name || 'Administrator'}</div>
-              <div className="text-[11px] text-zinc-500 truncate">{adminUser?.email || 'admin@novix.com'}</div>
+              <div className="text-xs font-bold text-slate-900 truncate">{adminUser?.name || 'Administrator'}</div>
+              <div className="text-[11px] text-slate-500 truncate">{adminUser?.email || 'admin@novix.com'}</div>
             </div>
             <button
               onClick={handleLogout}
               title="Sign Out"
-              className="text-zinc-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-zinc-800 transition"
+              className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
             >
               <LogOut size={16} />
             </button>
           </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950">
-        <header className="h-14 border-b border-zinc-800/80 bg-zinc-900/30 flex items-center px-6 justify-between">
-          <div className="flex items-center gap-3 text-xs text-zinc-400">
-            <span className="font-medium text-white">Novix Console</span>
-            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono">LIVE v2.4</span>
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 border-b border-slate-200/80 bg-white/80 backdrop-blur-md flex items-center px-8 justify-between">
+          <div className="flex items-center gap-3 text-xs">
+            <span className="font-semibold text-slate-900">Control Console</span>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-mono text-[10px]">v2.4 Active</span>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              Connected
+            <div className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700 flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              Connected to MongoDB
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-8">{children}</main>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production tsx server.js",
     "lint": "eslint",
     "seed": "tsx scripts/seed-demo-user.ts",
+    "seed:admin": "tsx scripts/seed-admin.ts",
     "db:clear": "tsx scripts/clear-db.ts"
   },
   "dependencies": {
