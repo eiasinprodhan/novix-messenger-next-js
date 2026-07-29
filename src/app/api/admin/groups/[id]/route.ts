@@ -34,7 +34,7 @@ export async function DELETE(
       await AuditLog.create({
         admin: adminUser._id,
         action: 'DELETE_GROUP',
-        targetModel: 'Group',
+        targetType: 'Group',
         targetId: group._id.toString(),
         details: { groupName: group.name },
       });
