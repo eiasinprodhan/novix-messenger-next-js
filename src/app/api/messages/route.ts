@@ -24,16 +24,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'friendId is required' }, { status: 400 });
     }
 
-    // Verify they are friends
-    const friendship = await Friendship.findOne({
-      $or: [
-        { requester: payload.userId, recipient: friendId, status: 'accepted' },
-        { requester: friendId, recipient: payload.userId, status: 'accepted' },
-      ],
-    });
+    // Check if either user is an admin
+    const currentUserObj = await User.findById(payload.userId).select('role');
+    const targetUserObj = await User.findById(friendId).select('role');
+    const isAdminInvolved = currentUserObj?.role === 'admin' || targetUserObj?.role === 'admin';
 
-    if (!friendship) {
-      return NextResponse.json({ error: 'You are not friends with this user' }, { status: 403 });
+    if (!isAdminInvolved) {
+      // Verify they are friends
+      const friendship = await Friendship.findOne({
+        $or: [
+          { requester: payload.userId, recipient: friendId, status: 'accepted' },
+          { requester: friendId, recipient: payload.userId, status: 'accepted' },
+        ],
+      });
+
+      if (!friendship) {
+        return NextResponse.json({ error: 'You are not friends with this user' }, { status: 403 });
+      }
     }
 
     // Mark messages sent by friendId to current user as 'read'
@@ -112,16 +119,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Verify friendship
-    const friendship = await Friendship.findOne({
-      $or: [
-        { requester: payload.userId, recipient: receiverId, status: 'accepted' },
-        { requester: receiverId, recipient: payload.userId, status: 'accepted' },
-      ],
-    });
+    // Check if either user is an admin
+    const senderUserObj = await User.findById(payload.userId).select('role');
+    const receiverUserObj = await User.findById(receiverId).select('role');
+    const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
-    if (!friendship) {
-      return NextResponse.json({ error: 'You can only chat with friends' }, { status: 403 });
+    if (!isAdminInvolved) {
+      // Verify friendship
+      const friendship = await Friendship.findOne({
+        $or: [
+          { requester: payload.userId, recipient: receiverId, status: 'accepted' },
+          { requester: receiverId, recipient: payload.userId, status: 'accepted' },
+        ],
+      });
+
+      if (!friendship) {
+        return NextResponse.json({ error: 'You can only chat with friends' }, { status: 403 });
+      }
     }
 
     // Determine initial status based on online state

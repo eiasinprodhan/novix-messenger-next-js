@@ -28,8 +28,9 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Exclude current user
+    // Exclude current user and admin users
     searchFilter._id = { $ne: payload.userId };
+    searchFilter.role = { $ne: 'admin' };
 
     const skip = (page - 1) * limit;
 
