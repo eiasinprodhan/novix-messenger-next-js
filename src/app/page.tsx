@@ -52,36 +52,36 @@ export default function NovixHome() {
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-800/80 py-4 px-2 space-y-2 bg-[#090d16]/95 backdrop-blur-2xl">
-            <Link 
-              href="#features" 
+            <Link
+              href="#features"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
             >
               Features
             </Link>
-            <Link 
-              href="#showcase" 
+            <Link
+              href="#showcase"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
             >
               Ecosystem & Apps
             </Link>
-            <Link 
-              href="/terms" 
+            <Link
+              href="/terms"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
             >
               Terms & Conditions
             </Link>
-            <Link 
-              href="/privacy" 
+            <Link
+              href="/privacy"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
             >
               Privacy Policy
             </Link>
-            <Link 
-              href="/delete-account" 
+            <Link
+              href="/delete-account"
               onClick={() => setMobileMenuOpen(false)}
               className="block mt-2 px-4 py-2.5 text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl text-sm shadow-md"
             >
@@ -109,12 +109,12 @@ export default function NovixHome() {
 
           <div className="flex justify-center mb-6">
             <div className="relative p-1 bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-blue-500/30">
-              <Image 
-                src="/app_icon.png" 
-                alt="Novix Messenger Icon" 
-                width={96} 
+              <Image
+                src="/app_icon.png"
+                alt="Novix Messenger Icon"
+                width={96}
                 height={96}
-                className="rounded-2xl w-20 h-20 sm:w-24 sm:h-24 object-cover" 
+                className="rounded-2xl w-20 h-20 sm:w-24 sm:h-24 object-cover"
               />
             </div>
           </div>
@@ -139,8 +139,8 @@ export default function NovixHome() {
             >
               <Download size={20} /> Download on Google Play
             </a>
-            <Link 
-              href="#showcase" 
+            <Link
+              href="#showcase"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/70 rounded-2xl font-semibold text-base backdrop-blur-md transition"
             >
               Explore Ecosystem <ChevronRight size={18} />
@@ -196,12 +196,12 @@ export default function NovixHome() {
                 </p>
               </div>
               <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950/60 flex items-center justify-center p-4">
-                <Image 
-                  src="/novix_vpn.png" 
-                  alt="Novix VPN Feature" 
-                  width={400} 
-                  height={220} 
-                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300" 
+                <Image
+                  src="/novix_vpn.png"
+                  alt="Novix VPN Feature"
+                  width={400}
+                  height={220}
+                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300"
                 />
               </div>
             </div>
@@ -222,12 +222,12 @@ export default function NovixHome() {
                 </p>
               </div>
               <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950/60 flex items-center justify-center p-4">
-                <Image 
-                  src="/snake_x.png" 
-                  alt="Snake X Game" 
-                  width={400} 
-                  height={220} 
-                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300" 
+                <Image
+                  src="/snake_x.png"
+                  alt="Snake X Game"
+                  width={400}
+                  height={220}
+                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300"
                 />
               </div>
             </div>
@@ -279,8 +279,8 @@ export default function NovixHome() {
                 desc: 'Receive immediate notifications for critical messages without draining battery.'
               },
             ].map((f) => (
-              <div 
-                key={f.title} 
+              <div
+                key={f.title}
                 className="p-6 sm:p-8 rounded-3xl bg-slate-900/60 border border-slate-800/90 hover:border-slate-700 transition duration-300"
               >
                 <div className={`w-12 h-12 rounded-2xl ${f.bg} ${f.color} flex items-center justify-center mb-5`}>
@@ -309,7 +309,6 @@ export default function NovixHome() {
             <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
             <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
             <Link href="/delete-account" className="hover:text-white transition">Delete Account</Link>
-            <Link href="/admin" className="hover:text-white transition">Admin Dashboard</Link>
           </div>
         </div>
       </footer>
