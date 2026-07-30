@@ -34,7 +34,6 @@ export default function NovixHome() {
             <Link href="#showcase" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Ecosystem</Link>
             <Link href="/terms" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Terms</Link>
             <Link href="/privacy" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Privacy</Link>
-            <Link href="/admin" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Admin Portal</Link>
             <Link href="/delete-account" className="ml-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition transform active:scale-95">
               Delete Account
             </Link>
@@ -80,13 +79,6 @@ export default function NovixHome() {
               className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
             >
               Privacy Policy
-            </Link>
-            <Link 
-              href="/admin" 
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
-            >
-              Admin Portal
             </Link>
             <Link 
               href="/delete-account" 

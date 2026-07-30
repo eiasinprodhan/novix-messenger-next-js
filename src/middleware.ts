@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const ALLOWED_HEADERS = 'Content-Type, Authorization, Accept, X-Requested-With, x-device-id, x-device-name, x-device-type, x-device-os, x-device-browser';
+
 export function middleware(request: NextRequest) {
   const origin = request.headers.get('origin') || '*';
 
@@ -12,7 +14,7 @@ export function middleware(request: NextRequest) {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept, X-Requested-With',
+        'Access-Control-Allow-Headers': ALLOWED_HEADERS,
         'Access-Control-Max-Age': '86400',
       },
     });
@@ -23,7 +25,7 @@ export function middleware(request: NextRequest) {
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Credentials', 'true');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  response.headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
 
   return response;
 }
