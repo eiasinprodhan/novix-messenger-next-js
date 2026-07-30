@@ -80,13 +80,6 @@ export default function NovixHome() {
             >
               Privacy Policy
             </Link>
-            <Link
-              href="/delete-account"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block mt-2 px-4 py-2.5 text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl text-sm shadow-md"
-            >
-              Delete Account
-            </Link>
           </div>
         )}
       </nav>
