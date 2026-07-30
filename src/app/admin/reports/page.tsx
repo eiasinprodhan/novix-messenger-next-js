@@ -75,7 +75,7 @@ export default function AdminReports() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         {['pending', 'reviewed', 'resolved', 'dismissed'].map((status) => (
           <button
             key={status}

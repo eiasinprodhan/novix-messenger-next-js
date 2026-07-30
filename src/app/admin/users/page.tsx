@@ -210,20 +210,20 @@ export default function AdminUsers() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">User Directory</h1>
           <p className="text-slate-500 text-sm mt-0.5">Manage accounts, send direct messages, or broadcast to all users</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               setMessageContent('');
               setActionError('');
               setIsBroadcastOpen(true);
             }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-indigo-600/20"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl transition shadow-sm shadow-indigo-600/20"
           >
             <Radio size={18} /> Broadcast to All Users
           </button>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl transition shadow-sm shadow-blue-600/20"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl transition shadow-sm shadow-blue-600/20"
           >
             <UserPlus size={18} /> Create Account
           </button>
@@ -238,7 +238,7 @@ export default function AdminUsers() {
       )}
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="relative flex-1">
             <input
@@ -250,7 +250,7 @@ export default function AdminUsers() {
             />
             <Search className="absolute left-3.5 top-3 text-slate-400" size={18} />
           </div>
-          <button type="submit" className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition">
+          <button type="submit" className="px-4 sm:px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition">
             Search
           </button>
         </form>
@@ -270,8 +270,8 @@ export default function AdminUsers() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <table className="w-full text-left text-sm border-collapse">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-xs">
+        <table className="w-full text-left text-sm border-collapse min-w-[700px]">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
             <tr>
               <th className="p-4">User</th>

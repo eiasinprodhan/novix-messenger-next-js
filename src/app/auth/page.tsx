@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function AuthDemo() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -81,12 +82,17 @@ export default function AuthDemo() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-8">
       <div className="max-w-md mx-auto">
-        <div className="mb-8">
-          <Link href="/" className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition">← Back to home</Link>
-          <h1 className="text-3xl font-extrabold mt-3 tracking-tight text-slate-900">Novix Auth Console</h1>
-          <p className="text-sm text-slate-500 mt-1">Test authentication & user API endpoints</p>
+        <div className="mb-8 flex items-center gap-4">
+          <Link href="/" className="shrink-0">
+            <Image src="/app_icon.png" alt="Novix Logo" width={48} height={48} className="rounded-2xl shadow-md" />
+          </Link>
+          <div>
+            <Link href="/" className="text-xs font-bold text-blue-600 hover:text-blue-700 transition">← Back to home</Link>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Novix Auth</h1>
+            <p className="text-xs sm:text-sm text-slate-500">Authentication & User API Console</p>
+          </div>
         </div>
 
         <div className="flex mb-6 rounded-2xl bg-slate-200/80 p-1 text-sm font-semibold">

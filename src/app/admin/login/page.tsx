@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Mail, AlertCircle } from 'lucide-react';
 
@@ -40,17 +41,18 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 selection:bg-blue-500 selection:text-white">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900/95 p-4 sm:p-6 selection:bg-blue-500 selection:text-white relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 text-white shadow-lg shadow-blue-500/20">
-            <Shield size={24} />
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-xl shadow-blue-500/20 mb-4 overflow-hidden">
+            <Image src="/app_icon.png" alt="Novix Logo" width={56} height={56} className="w-full h-full object-cover rounded-[14px]" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Novix Admin</h1>
-          <p className="text-slate-500 mt-1 text-sm font-medium">Management Console Sign In</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">Novix Admin</h1>
+          <p className="text-slate-400 mt-1 text-sm font-medium">Management Console Sign In</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4 bg-white border border-slate-200/90 p-8 rounded-3xl shadow-sm">
+        <form onSubmit={handleLogin} className="space-y-4 bg-slate-900/90 border border-slate-800 p-6 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
           {error && (
             <div className="bg-red-50 text-red-600 text-xs font-medium p-3.5 rounded-xl border border-red-200 flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0 text-red-500" />

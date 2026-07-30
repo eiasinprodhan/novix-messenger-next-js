@@ -1,324 +1,327 @@
+'use client';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
   MessageCircle, Phone, Video, Shield, Lock, Globe, Zap,
   Users, Star, ChevronRight, Check, Download, Smile, Bell,
-  ArrowRight
+  Menu, X, Gamepad2, ShieldCheck, Sparkles, ArrowRight
 } from 'lucide-react';
 
 export default function NovixHome() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', fontFamily: 'var(--font-geist-sans, system-ui, sans-serif)', overflowX: 'hidden' }}>
-
+    <div className="min-h-screen bg-[#090d16] text-white font-sans overflow-x-hidden selection:bg-blue-600 selection:text-white">
       {/* ── Navbar ── */}
-      <nav style={{
-        position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(10,15,30,0.85)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        padding: '0 1.5rem',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <nav className="sticky top-0 z-50 bg-[#090d16]/90 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-8 transition-all">
+        <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
           {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Image src="/app_icon.png" alt="Novix" width={38} height={38} style={{ borderRadius: 10 }} />
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.5px', lineHeight: 1 }}>Novix</div>
-              <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Messenger</div>
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-lg shadow-blue-500/20 group-hover:scale-105 transition shrink-0 overflow-hidden">
+              <Image src="/app_icon.png" alt="Novix Logo" width={40} height={40} className="w-full h-full object-cover rounded-[10px]" />
             </div>
-          </div>
+            <div>
+              <div className="font-extrabold text-lg tracking-tight leading-none text-white">Novix</div>
+              <div className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Messenger</div>
+            </div>
+          </Link>
 
-          {/* Nav links */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link href="#features" style={{ padding: '8px 16px', color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 500, textDecoration: 'none', borderRadius: 10, transition: 'color 0.2s' }}>Features</Link>
-            <Link href="/terms" style={{ padding: '8px 16px', color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 500, textDecoration: 'none', borderRadius: 10 }}>Terms</Link>
-            <Link href="/privacy" style={{ padding: '8px 16px', color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 500, textDecoration: 'none', borderRadius: 10 }}>Privacy</Link>
-            <Link href="/delete-account" style={{
-              padding: '9px 20px',
-              background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-              color: '#fff', fontSize: 14, fontWeight: 600,
-              textDecoration: 'none', borderRadius: 12,
-              boxShadow: '0 4px 20px rgba(99,102,241,0.4)',
-              display: 'flex', alignItems: 'center', gap: 6
-            }}>
+          {/* Desktop Nav links */}
+          <div className="hidden md:flex items-center gap-2">
+            <Link href="#features" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Features</Link>
+            <Link href="#showcase" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Ecosystem</Link>
+            <Link href="/terms" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Terms</Link>
+            <Link href="/privacy" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Privacy</Link>
+            <Link href="/admin" className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium rounded-xl hover:bg-slate-800/60 transition">Admin Portal</Link>
+            <Link href="/delete-account" className="ml-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition transform active:scale-95">
               Delete Account
             </Link>
           </div>
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800/80 transition"
+            aria-label="Toggle navigation"
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-800/80 py-4 px-2 space-y-2 bg-[#090d16]/95 backdrop-blur-2xl">
+            <Link 
+              href="#features" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
+            >
+              Features
+            </Link>
+            <Link 
+              href="#showcase" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
+            >
+              Ecosystem & Apps
+            </Link>
+            <Link 
+              href="/terms" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
+            >
+              Terms & Conditions
+            </Link>
+            <Link 
+              href="/privacy" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
+            >
+              Privacy Policy
+            </Link>
+            <Link 
+              href="/admin" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl text-sm font-medium"
+            >
+              Admin Portal
+            </Link>
+            <Link 
+              href="/delete-account" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block mt-2 px-4 py-2.5 text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl text-sm shadow-md"
+            >
+              Delete Account
+            </Link>
+          </div>
+        )}
       </nav>
 
-      {/* ── Hero ── */}
-      <section style={{ position: 'relative', paddingTop: '6rem', paddingBottom: '6rem', textAlign: 'center', overflow: 'hidden' }}>
-        {/* Glow blobs */}
-        <div style={{ position: 'absolute', top: -100, left: '20%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', top: 50, right: '10%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      {/* ── Hero Section ── */}
+      <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 text-center overflow-hidden px-4 sm:px-6">
+        {/* Glow Effects & SVG Doodle Background */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full opacity-10 pointer-events-none">
+          <Image src="/doodle.svg" alt="Doodle pattern" fill className="object-cover" />
+        </div>
+        <div className="absolute top-[-100px] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute top-[100px] right-[10%] w-[400px] h-[400px] bg-indigo-600/15 rounded-full blur-[120px] pointer-events-none" />
 
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 1.5rem', position: 'relative', zIndex: 1 }}>
+        <div className="max-w-4xl mx-auto relative z-10">
           {/* Badge */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)',
-            borderRadius: 99, padding: '6px 16px', marginBottom: '2rem',
-            fontSize: 13, fontWeight: 600, color: '#60a5fa'
-          }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-            Available on Android — Free
+          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-full px-4 py-1.5 mb-8 text-xs sm:text-sm font-semibold text-blue-400 backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            Available on Android & Web — Modern & Encrypted
           </div>
 
-          <Image src="/app_icon.png" alt="Novix Messenger" width={100} height={100}
-            style={{ borderRadius: 24, boxShadow: '0 20px 60px rgba(59,130,246,0.4)', marginBottom: '2rem' }} />
+          <div className="flex justify-center mb-6">
+            <div className="relative p-1 bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-blue-500/30">
+              <Image 
+                src="/app_icon.png" 
+                alt="Novix Messenger Icon" 
+                width={96} 
+                height={96}
+                className="rounded-2xl w-20 h-20 sm:w-24 sm:h-24 object-cover" 
+              />
+            </div>
+          </div>
 
-          <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 900, letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: '1.5rem' }}>
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6">
             Chat, Call & Connect{' '}
-            <span style={{ background: 'linear-gradient(90deg, #3b82f6, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
               with Novix
             </span>
           </h1>
 
-          <p style={{ fontSize: 18, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', marginBottom: '2.5rem', maxWidth: 560, margin: '0 auto 2.5rem' }}>
-            A fast, secure, and modern messaging app built for real people. Send messages, make crystal-clear calls, share media, and stay connected — all in one place.
+          <p className="text-base sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+            A fast, secure, and modern messaging platform. Enjoy crystal-clear calls, end-to-end encrypted chats, built-in games, and integrated security features.
           </p>
 
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <a
               href="https://play.google.com/store"
               target="_blank"
               rel="noreferrer"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 10,
-                padding: '14px 28px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-                borderRadius: 16, fontWeight: 700, fontSize: 16,
-                color: '#fff', textDecoration: 'none',
-                boxShadow: '0 8px 32px rgba(99,102,241,0.45)',
-                transition: 'transform 0.2s, box-shadow 0.2s'
-              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-base shadow-xl shadow-blue-600/30 transition transform hover:-translate-y-0.5 active:translate-y-0"
             >
-              <Download size={18} /> Download on Google Play
+              <Download size={20} /> Download on Google Play
             </a>
-            <Link href="#features" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 10,
-              padding: '14px 28px',
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 16, fontWeight: 600, fontSize: 16,
-              color: 'rgba(255,255,255,0.8)', textDecoration: 'none'
-            }}>
-              Explore Features <ChevronRight size={16} />
+            <Link 
+              href="#showcase" 
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/70 rounded-2xl font-semibold text-base backdrop-blur-md transition"
+            >
+              Explore Ecosystem <ChevronRight size={18} />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ── Stats ── */}
-      <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '3rem 1.5rem' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, textAlign: 'center' }}>
+      {/* ── Stats Banner ── */}
+      <section className="border-y border-slate-800/80 bg-slate-900/40 py-10 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
             { value: '100%', label: 'End-to-End Encrypted' },
-            { value: 'Free', label: 'Always Free to Use' },
-            { value: 'HD', label: 'Crystal-Clear Voice Calls' },
-            { value: '24/7', label: 'Real-Time Messaging' },
+            { value: 'HD Voice', label: 'Crystal-Clear Calls' },
+            { value: '0 Ads', label: '100% Privacy Focused' },
+            { value: '24/7', label: 'Real-Time Sync' },
           ].map((s) => (
-            <div key={s.label}>
-              <div style={{ fontSize: 36, fontWeight: 900, background: 'linear-gradient(135deg,#3b82f6,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.value}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>{s.label}</div>
+            <div key={s.label} className="p-2">
+              <div className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                {s.value}
+              </div>
+              <div className="text-xs sm:text-sm text-slate-400 font-medium mt-1">{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Features ── */}
-      <section id="features" style={{ padding: '6rem 1.5rem' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-            <div style={{ fontSize: 13, color: '#60a5fa', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Everything You Need</div>
-            <h2 style={{ fontSize: 'clamp(1.75rem, 4vw, 2.75rem)', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 16 }}>Packed with Powerful Features</h2>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 16, maxWidth: 500, margin: '0 auto' }}>Novix Messenger brings together all the communication tools you need in a sleek, beautiful package.</p>
+      {/* ── Flutter Ecosystem Showcase Section ── */}
+      <section id="showcase" className="py-20 px-4 sm:px-6 relative bg-slate-950/60">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-3">Ecosystem & Extra Apps</div>
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-4">Integrated Modern Suite</h2>
+            <p className="text-slate-400 text-base sm:text-lg max-w-xl mx-auto">
+              Novix is more than just messaging — it is a complete suite of secure connectivity and entertainment.
+            </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Novix VPN Card */}
+            <div className="group relative rounded-3xl bg-slate-900/80 border border-slate-800 p-6 sm:p-8 hover:border-blue-500/50 transition duration-300 shadow-xl overflow-hidden flex flex-col justify-between">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl group-hover:bg-blue-600/20 transition" />
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    <ShieldCheck size={28} />
+                  </span>
+                  <span className="text-xs font-mono px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full font-semibold">Included</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-white">Novix VPN Protection</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                  Seamlessly encrypt your entire internet pipeline with high-speed proxy protocols. Protect your public Wi-Fi connections and keep your IP hidden.
+                </p>
+              </div>
+              <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950/60 flex items-center justify-center p-4">
+                <Image 
+                  src="/novix_vpn.png" 
+                  alt="Novix VPN Feature" 
+                  width={400} 
+                  height={220} 
+                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300" 
+                />
+              </div>
+            </div>
+
+            {/* Snake X Card */}
+            <div className="group relative rounded-3xl bg-slate-900/80 border border-slate-800 p-6 sm:p-8 hover:border-indigo-500/50 transition duration-300 shadow-xl overflow-hidden flex flex-col justify-between">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl group-hover:bg-indigo-600/20 transition" />
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <Gamepad2 size={28} />
+                  </span>
+                  <span className="text-xs font-mono px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full font-semibold">In-App Entertainment</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-white">Snake X Gaming</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                  Play mini-games directly while chatting. Compete with your friends on global leaderboards and challenge your group members right inside conversations.
+                </p>
+              </div>
+              <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950/60 flex items-center justify-center p-4">
+                <Image 
+                  src="/snake_x.png" 
+                  alt="Snake X Game" 
+                  width={400} 
+                  height={220} 
+                  className="object-contain max-h-full rounded-lg group-hover:scale-105 transition duration-300" 
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Features Grid ── */}
+      <section id="features" className="py-20 px-4 sm:px-6 relative">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-3">Core Features</div>
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-4">Built for Effortless Communication</h2>
+            <p className="text-slate-400 text-base sm:text-lg max-w-xl mx-auto">
+              Everything you need in a modern messaging platform with clean design and responsive performance.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                icon: <MessageCircle size={24} />, color: '#3b82f6',
+                icon: <MessageCircle size={24} />, color: 'text-blue-400', bg: 'bg-blue-500/10',
                 title: 'Instant Messaging',
-                desc: 'Send text messages, emojis, stickers, GIFs, and voice notes. Conversations that feel alive and expressive.'
+                desc: 'Send text, emojis, audio notes, and media. Smooth real-time conversation flows.'
               },
               {
-                icon: <Phone size={24} />, color: '#10b981',
-                title: 'Voice Calls',
-                desc: 'Crystal-clear HD voice calls with minimal latency. Stay connected with friends and family anywhere in the world.'
+                icon: <Phone size={24} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10',
+                title: 'HD Voice Calls',
+                desc: 'Low-latency crystal clear audio calls powered by modern WebRTC standard.'
               },
               {
-                icon: <Video size={24} />, color: '#8b5cf6',
-                title: 'Video Calls',
-                desc: 'Face-to-face conversations with smooth, high-quality video. Feel closer to the people you care about.'
+                icon: <Video size={24} />, color: 'text-purple-400', bg: 'bg-purple-500/10',
+                title: 'HD Video Calling',
+                desc: 'High quality face-to-face video calls designed for stable performance.'
               },
               {
-                icon: <Lock size={24} />, color: '#f59e0b',
-                title: 'End-to-End Encryption',
-                desc: 'All messages and calls are fully encrypted. Only you and the person you\'re talking to can read your conversations.'
+                icon: <Lock size={24} />, color: 'text-amber-400', bg: 'bg-amber-500/10',
+                title: 'End-to-End Security',
+                desc: 'Your conversations are private. Encryption ensures no third-party interception.'
               },
               {
-                icon: <Users size={24} />, color: '#ec4899',
-                title: 'Group Chats',
-                desc: 'Create group conversations with friends, family, or communities. Share moments and coordinate effortlessly.'
+                icon: <Users size={24} />, color: 'text-pink-400', bg: 'bg-pink-500/10',
+                title: 'Group Communities',
+                desc: 'Create group channels, manage member permissions, and share updates.'
               },
               {
-                icon: <Bell size={24} />, color: '#14b8a6',
-                title: 'Smart Notifications',
-                desc: 'Stay up to date without being overwhelmed. Smart notification grouping keeps you informed, not distracted.'
-              },
-              {
-                icon: <Globe size={24} />, color: '#6366f1',
-                title: 'Media Sharing',
-                desc: 'Share photos, videos, documents, and files instantly. No size limits that get in the way of sharing memories.'
-              },
-              {
-                icon: <Smile size={24} />, color: '#f97316',
-                title: 'Expressive Reactions',
-                desc: 'React to messages with emojis. Say more with less — a heart, a laugh, or a thumbs up says it all.'
-              },
-              {
-                icon: <Shield size={24} />, color: '#22c55e',
-                title: 'Privacy Controls',
-                desc: 'Control who sees your status, profile photo, and last seen. Your data stays yours — always.'
+                icon: <Bell size={24} />, color: 'text-teal-400', bg: 'bg-teal-500/10',
+                title: 'Smart Push Alerts',
+                desc: 'Receive immediate notifications for critical messages without draining battery.'
               },
             ].map((f) => (
-              <div key={f.title} style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: 20, padding: '28px 28px',
-                transition: 'border-color 0.2s, transform 0.2s',
-              }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 14,
-                  background: `${f.color}18`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: f.color, marginBottom: 18
-                }}>{f.icon}</div>
-                <h3 style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>{f.title}</h3>
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, lineHeight: 1.7, margin: 0 }}>{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Why Novix ── */}
-      <section style={{ padding: '5rem 1.5rem', background: 'rgba(255,255,255,0.015)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 13, color: '#60a5fa', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Why Choose Novix</div>
-            <h2 style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.4rem)', fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 24 }}>
-              Messaging That Respects Your Privacy
-            </h2>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, lineHeight: 1.8, marginBottom: 32 }}>
-              Novix is built from the ground up with privacy as a core principle — not an afterthought. We believe your conversations belong to you.
-            </p>
-            {[
-              'No ads, no tracking, no data selling',
-              'Messages deleted from servers after delivery',
-              'Open reporting for safety violations',
-              'Verified accounts for trusted connections',
-              'Lightweight app with battery-friendly design',
-            ].map((item) => (
-              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e', flexShrink: 0 }}>
-                  <Check size={13} />
+              <div 
+                key={f.title} 
+                className="p-6 sm:p-8 rounded-3xl bg-slate-900/60 border border-slate-800/90 hover:border-slate-700 transition duration-300"
+              >
+                <div className={`w-12 h-12 rounded-2xl ${f.bg} ${f.color} flex items-center justify-center mb-5`}>
+                  {f.icon}
                 </div>
-                <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>{item}</span>
+                <h3 className="text-xl font-bold mb-2 text-white">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {[
-              { icon: <Lock size={20} />, color: '#3b82f6', label: 'Encrypted' },
-              { icon: <Zap size={20} />, color: '#f59e0b', label: 'Fast' },
-              { icon: <Shield size={20} />, color: '#22c55e', label: 'Safe' },
-              { icon: <Star size={20} />, color: '#ec4899', label: 'Loved' },
-            ].map((item) => (
-              <div key={item.label} style={{
-                background: `${item.color}10`,
-                border: `1px solid ${item.color}25`,
-                borderRadius: 20, padding: 28, textAlign: 'center'
-              }}>
-                <div style={{ color: item.color, marginBottom: 10, display: 'flex', justifyContent: 'center' }}>{item.icon}</div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA ── */}
-      <section style={{ padding: '6rem 1.5rem', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(99,102,241,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ maxWidth: 600, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-1px', marginBottom: 20 }}>
-            Ready to Start Chatting?
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 16, marginBottom: 36, lineHeight: 1.7 }}>
-            Join thousands of users already enjoying secure, fast, and free messaging on Novix Messenger.
-          </p>
-          <a
-            href="https://play.google.com/store"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 10,
-              padding: '16px 36px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-              borderRadius: 18, fontWeight: 700, fontSize: 17,
-              color: '#fff', textDecoration: 'none',
-              boxShadow: '0 12px 40px rgba(99,102,241,0.5)',
-            }}
-          >
-            <Download size={20} /> Download Free on Android
-          </a>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '2.5rem 1.5rem', background: 'rgba(0,0,0,0.3)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+      <footer className="border-t border-slate-800/80 bg-slate-950/80 py-12 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center gap-4">
+            <Image src="/company_logo.png" alt="Company Logo" width={40} height={40} className="rounded-xl" />
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <Image src="/app_icon.png" alt="Novix" width={30} height={30} style={{ borderRadius: 8 }} />
-                <span style={{ fontWeight: 800, fontSize: 16 }}>Novix Messenger</span>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, maxWidth: 260, lineHeight: 1.6 }}>
-                Fast, secure, and free messaging for everyone. Connect with the world.
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Legal</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, textDecoration: 'none' }}>Terms &amp; Conditions</Link>
-                  <Link href="/privacy" style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, textDecoration: 'none' }}>Privacy Policy</Link>
-                  <Link href="/delete-account" style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, textDecoration: 'none' }}>Delete Account</Link>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>App</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <a href="#features" style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, textDecoration: 'none' }}>Features</a>
-                  <a href="https://play.google.com/store" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, textDecoration: 'none' }}>Download</a>
-                </div>
-              </div>
+              <div className="font-extrabold text-white text-base">Novix Messenger</div>
+              <div className="text-xs text-slate-500">© {new Date().getFullYear()} Novix Inc. All rights reserved.</div>
             </div>
           </div>
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center' }}>
-            <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13, margin: 0 }}>© {new Date().getFullYear()} Novix Messenger. All rights reserved.</p>
-            <div style={{ display: 'flex', gap: 20 }}>
-              <Link href="/terms" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none' }}>Terms</Link>
-              <Link href="/privacy" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none' }}>Privacy</Link>
-              <Link href="/delete-account" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none' }}>Delete Account</Link>
-            </div>
+
+          <div className="flex flex-wrap justify-center gap-6 text-sm font-medium text-slate-400">
+            <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
+            <Link href="/delete-account" className="hover:text-white transition">Delete Account</Link>
+            <Link href="/admin" className="hover:text-white transition">Admin Dashboard</Link>
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
