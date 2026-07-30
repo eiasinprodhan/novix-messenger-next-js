@@ -117,6 +117,11 @@ export async function POST(request: NextRequest) {
       await user.save();
     }
 
+    const deviceId = request.headers.get('x-device-id');
+    if (deviceId) {
+      const { updateDeviceActivity } = await import('@/lib/device');
+      await updateDeviceActivity(user._id.toString(), request);
+    }
 
     // Flag if core profile fields are still missing
     const userData = user.toJSON() as any;
