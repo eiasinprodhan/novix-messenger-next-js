@@ -98,12 +98,9 @@ export async function GET(
   </div>
   <script>
     function joinGroup() {
-      var appUrl = "novix://join/${id}";
-      var intentUrl = "intent://join/${id}#Intent;scheme=novix;package=com.novix.messenger.novix_messenger;end";
-      window.location.href = appUrl;
-      setTimeout(function() {
-        window.location.href = intentUrl;
-      }, 500);
+      // Android Intent URL — the reliable way Chrome opens installed apps
+      var intentUrl = "intent://join/${id}#Intent;scheme=novix;package=com.novix.messenger.novix_messenger;S.browser_fallback_url=https%3A%2F%2Fnovix-messenger-next-js.onrender.com%2Fjoin%2F${id};end";
+      window.location.href = intentUrl;
     }
   </script>
 </body>
