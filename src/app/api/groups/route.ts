@@ -12,14 +12,10 @@ export async function GET(request: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const groups = await Group.find({
-      $or: [
-        { 'members.user': payload.userId },
-        { pendingRequests: payload.userId },
-      ],
+      'members.user': payload.userId,
       isActive: true,
     })
       .populate('members.user', 'name username avatar isOnline')
-      .populate('pendingRequests', 'name username avatar isOnline')
       .populate('createdBy', 'name username')
       .sort({ updatedAt: -1 });
 
