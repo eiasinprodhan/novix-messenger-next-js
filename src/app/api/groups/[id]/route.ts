@@ -24,6 +24,8 @@ export async function GET(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
+    const isMember = group.members.some((m: any) => m.user && m.user._id && m.user._id.toString() === payload.userId);
+
     return NextResponse.json({ group, isMember });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Failed to get group' }, { status: 500 });
