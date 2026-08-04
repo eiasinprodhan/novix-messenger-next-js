@@ -98,7 +98,12 @@ export async function GET(
   </div>
   <script>
     function joinGroup() {
-      window.location.href = "novix://join/${id}";
+      var appUrl = "novix://join/${id}";
+      var intentUrl = "intent://join/${id}#Intent;scheme=novix;package=com.novix.messenger.novix_messenger;end";
+      window.location.href = appUrl;
+      setTimeout(function() {
+        window.location.href = intentUrl;
+      }, 500);
     }
   </script>
 </body>
