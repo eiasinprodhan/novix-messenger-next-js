@@ -16,6 +16,7 @@ export async function GET(
 
     const group = await Group.findById(id)
       .populate('members.user', 'name username avatar isOnline lastSeen')
+      .populate('pendingRequests', 'name username avatar isOnline')
       .populate('createdBy', 'name username')
       .populate('pinnedMessage');
 
@@ -95,7 +96,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Only group admins can update group details' }, { status: 403 });
     }
 
-    const { name, description, avatar, hideMembers, groupType, topicsEnabled, pinnedMessageId } = await request.json();
+    const { name, description, avatar, hideMembers, groupType, topicsEnabled, pinnedMessageId, autoApprove } = await request.json();
 
     if (name !== undefined) {
       if (!name || name.trim().length < 2) {
@@ -128,10 +129,15 @@ export async function PUT(
       group.pinnedMessage = pinnedMessageId ? pinnedMessageId : null;
     }
 
+    if (autoApprove !== undefined) {
+      group.autoApprove = Boolean(autoApprove);
+    }
+
     await group.save();
 
     const populated = await Group.findById(group._id)
       .populate('members.user', 'name username avatar isOnline lastSeen')
+      .populate('pendingRequests', 'name username avatar isOnline')
       .populate('createdBy', 'name username')
       .populate('pinnedMessage');
 

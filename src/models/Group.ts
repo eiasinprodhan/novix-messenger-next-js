@@ -17,6 +17,8 @@ export interface IGroup extends Document {
   groupType: string;
   topicsEnabled: boolean;
   pinnedMessage?: mongoose.Types.ObjectId;
+  autoApprove: boolean;
+  pendingRequests: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +74,16 @@ const GroupSchema: Schema<IGroup> = new Schema(
       ref: 'Message',
       default: null,
     },
+    autoApprove: {
+      type: Boolean,
+      default: true,
+    },
+    pendingRequests: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   { timestamps: true }
 );
