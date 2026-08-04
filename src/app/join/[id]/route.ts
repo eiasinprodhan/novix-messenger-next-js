@@ -77,7 +77,14 @@ export async function GET(
       font-weight: 600;
       font-size: 16px;
       width: 100%;
+      cursor: pointer;
+      border: none;
       box-sizing: border-box;
+    }
+    .subtext {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #64748b;
     }
   </style>
 </head>
@@ -86,13 +93,12 @@ export async function GET(
     ${groupAvatar ? `<img src="${groupAvatar}" class="avatar" />` : `<div class="avatar">👥</div>`}
     <h1>${groupName}</h1>
     <p>${memberCount} members on Novix Messenger</p>
-    <a href="novix://join/${id}" class="btn" onclick="openApp()">Join Group</a>
+    <button class="btn" onclick="joinGroup()">Join Group</button>
+    <div class="subtext">If you have the Novix app installed, tapping links inside chat opens group previews automatically.</div>
   </div>
   <script>
-    function openApp() {
-      setTimeout(function() {
-        window.location.href = "https://novix-messenger-next-js.onrender.com/app";
-      }, 2000);
+    function joinGroup() {
+      window.location.href = "novix://join/${id}";
     }
   </script>
 </body>
