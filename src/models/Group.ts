@@ -13,6 +13,10 @@ export interface IGroup extends Document {
   createdBy: mongoose.Types.ObjectId;
   members: IGroupMember[];
   isActive: boolean;
+  hideMembers: boolean;
+  groupType: string;
+  topicsEnabled: boolean;
+  pinnedMessage?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,6 +54,23 @@ const GroupSchema: Schema<IGroup> = new Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    hideMembers: {
+      type: Boolean,
+      default: false,
+    },
+    groupType: {
+      type: String,
+      default: 'Public',
+    },
+    topicsEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    pinnedMessage: {
+      type: Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
     },
   },
   { timestamps: true }

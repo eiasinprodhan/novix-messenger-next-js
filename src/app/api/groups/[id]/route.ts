@@ -16,7 +16,8 @@ export async function GET(
 
     const group = await Group.findById(id)
       .populate('members.user', 'name username avatar isOnline lastSeen')
-      .populate('createdBy', 'name username');
+      .populate('createdBy', 'name username')
+      .populate('pinnedMessage');
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
@@ -94,7 +95,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Only group admins can update group details' }, { status: 403 });
     }
 
-    const { name, description, avatar } = await request.json();
+    const { name, description, avatar, hideMembers, groupType, topicsEnabled, pinnedMessageId } = await request.json();
 
     if (name !== undefined) {
       if (!name || name.trim().length < 2) {
@@ -111,11 +112,28 @@ export async function PUT(
       group.avatar = avatar;
     }
 
+    if (hideMembers !== undefined) {
+      group.hideMembers = Boolean(hideMembers);
+    }
+
+    if (groupType !== undefined) {
+      group.groupType = groupType;
+    }
+
+    if (topicsEnabled !== undefined) {
+      group.topicsEnabled = Boolean(topicsEnabled);
+    }
+
+    if (pinnedMessageId !== undefined) {
+      group.pinnedMessage = pinnedMessageId ? pinnedMessageId : null;
+    }
+
     await group.save();
 
     const populated = await Group.findById(group._id)
       .populate('members.user', 'name username avatar isOnline lastSeen')
-      .populate('createdBy', 'name username');
+      .populate('createdBy', 'name username')
+      .populate('pinnedMessage');
 
     return NextResponse.json({ success: true, group: populated });
   } catch (error: any) {
