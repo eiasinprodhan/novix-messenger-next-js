@@ -1,3 +1,8 @@
+import dns from 'dns';
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (_) {}
+
 import { Server as NetServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import connectDB from './mongodb';
@@ -84,15 +89,35 @@ export function initSocketServer(server: NetServer) {
 
       socket.emit('authenticated', { success: true });
       console.log(`✅ User ${userId} authenticated`);
+
+      // Automatically join all active groups for this user so they receive real-time messages anywhere
+      try {
+        await connectDB();
+        const Group = (await import('../models/Group')).default;
+        const userGroups = await Group.find({
+          'members.user': userId,
+          isActive: true,
+        }).select('_id');
+        for (const g of userGroups) {
+          socket.join(`group:${g._id.toString()}`);
+        }
+        if (userGroups.length > 0) {
+          console.log(`👥 Joined ${userGroups.length} group rooms for user ${userId}`);
+        }
+      } catch (err) {
+        console.error('Failed to auto-join groups on socket auth:', err);
+      }
     });
 
     // JOIN CHAT ROOM
-    socket.on('join_chat', ({ friendId, groupId }: { friendId?: string; groupId?: string }) => {
-      const userId = socket.data.userId;
+    socket.on('join_chat', ({ friendId, groupId, userId: clientUserId }: { friendId?: string; groupId?: string; userId?: string }) => {
+      const userId = socket.data.userId || clientUserId;
       if (!userId) return;
+      socket.data.userId = userId;
 
       if (groupId) {
         socket.join(`group:${groupId}`);
+        console.log(`User ${userId} joined room group:${groupId}`);
       } else if (friendId) {
         const room = [userId, friendId].sort().join('_');
         socket.join(room);
@@ -202,6 +227,27 @@ export function initSocketServer(server: NetServer) {
       if (!senderId) return;
       const room = [senderId, receiverId].sort().join('_');
       socket.to(room).emit('typing', { userId: senderId, isTyping: false });
+    });
+
+    // GROUP TYPING
+    socket.on('group_typing', ({ groupId, isTyping }: { groupId: string; isTyping: boolean }) => {
+      const senderId = socket.data.userId;
+      if (!senderId || !groupId) return;
+      socket.to(`group:${groupId}`).emit('group_typing', {
+        groupId,
+        userId: senderId,
+        isTyping: Boolean(isTyping),
+      });
+    });
+
+    socket.on('stop_group_typing', ({ groupId }: { groupId: string }) => {
+      const senderId = socket.data.userId;
+      if (!senderId || !groupId) return;
+      socket.to(`group:${groupId}`).emit('group_typing', {
+        groupId,
+        userId: senderId,
+        isTyping: false,
+      });
     });
 
     // READ MESSAGES
@@ -317,7 +363,7 @@ export function initSocketServer(server: NetServer) {
     });
 
     // Caller starts a group call
-    socket.on('group_call_offer', (data: {
+    socket.on('group_call_offer', async (data: {
       groupId: string;
       roomName: string;
       callerInfo: { id: string; name: string; avatar?: string };
@@ -339,6 +385,50 @@ export function initSocketServer(server: NetServer) {
           });
         }
       });
+
+      // Send FCM push to all target users so devices wake up if closed/backgrounded
+      if (messaging && data.targetUserIds && data.targetUserIds.length > 0) {
+        try {
+          await connectDB();
+          const targetUsers = await User.find({
+            _id: { $in: data.targetUserIds.filter((id) => id !== callerId) },
+            fcmToken: { $exists: true, $ne: '' }
+          }).select('_id fcmToken').lean();
+
+          for (const u of targetUsers) {
+            if (u.fcmToken) {
+              messaging.send({
+                token: u.fcmToken,
+                data: {
+                  type: 'incoming_call',
+                  callId: data.callId,
+                  callerId,
+                  groupId: data.groupId,
+                  roomName: data.roomName,
+                  callerName: data.callerInfo.name,
+                  callerAvatar: data.callerInfo.avatar ?? '',
+                  isGroup: 'true',
+                },
+                android: {
+                  priority: 'high',
+                  ttl: 30000,
+                },
+                apns: {
+                  headers: { 'apns-priority': '10' },
+                  payload: {
+                    aps: {
+                      contentAvailable: true,
+                      sound: 'ringtone.mp3',
+                    },
+                  },
+                },
+              }).catch((err) => console.error(`[FCM] Failed to send group call push to ${u._id}:`, err));
+            }
+          }
+        } catch (e) {
+          console.error('[FCM] Failed group_call_offer push processing:', e);
+        }
+      }
     });
 
     // Callee answered — notify caller to connect to the LiveKit room
@@ -356,7 +446,7 @@ export function initSocketServer(server: NetServer) {
     });
 
     // Callee declines
-    socket.on('call_decline', (data: { callId: string; callerId: string }) => {
+    socket.on('call_decline', async (data: { callId: string; callerId: string }) => {
       const declinerId = socket.data.userId;
       if (!declinerId) return;
       console.log(`❌ [LiveKit] call_decline by ${declinerId}`);
@@ -364,15 +454,18 @@ export function initSocketServer(server: NetServer) {
         callId: data.callId,
         declinerId,
       });
+      // Send call_ended FCM to caller in case their app backgrounded
+      await sendCallEndedFCM(data.callerId, data.callId);
     });
 
     // Either party ends the call
-    socket.on('call_end', (data: { callId: string; targetUserId?: string; groupId?: string }) => {
+    socket.on('call_end', async (data: { callId: string; targetUserId?: string; groupId?: string }) => {
       const enderId = socket.data.userId;
       if (!enderId) return;
       console.log(`🔴 [LiveKit] call_end by ${enderId}`);
       if (data.targetUserId) {
         io?.to(`user:${data.targetUserId}`).emit('call_ended', { callId: data.callId, enderId });
+        await sendCallEndedFCM(data.targetUserId, data.callId);
       }
       if (data.groupId) {
         io?.to(`group:${data.groupId}`).emit('call_ended', { callId: data.callId, enderId });
@@ -406,4 +499,71 @@ export function initSocketServer(server: NetServer) {
 export function isUserOnline(userId: string) {
   const sockets = onlineUsers.get(userId);
   return sockets !== undefined && sockets.size > 0;
+}
+
+export async function sendCallEndedFCM(targetUserId: string, callId: string) {
+  if (!messaging || !targetUserId) return;
+  try {
+    await connectDB();
+    const user = await User.findById(targetUserId).select('fcmToken').lean();
+    if (user?.fcmToken) {
+      await messaging.send({
+        token: user.fcmToken,
+        data: {
+          type: 'call_ended',
+          callId,
+        },
+        android: {
+          priority: 'high',
+        },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: {
+            aps: {
+              contentAvailable: true,
+            },
+          },
+        },
+      });
+      console.log(`[FCM] call_ended notification sent to user ${targetUserId}`);
+    }
+  } catch (e) {
+    console.error(`[FCM] Failed to send call_ended notification to ${targetUserId}:`, e);
+  }
+}
+
+export async function dispatchCallAction(params: {
+  action: 'answer' | 'decline' | 'end';
+  callId: string;
+  senderId: string;
+  targetUserId?: string;
+  groupId?: string;
+}) {
+  const io = getIO();
+  const { action, callId, senderId, targetUserId, groupId } = params;
+
+  if (action === 'answer') {
+    if (targetUserId) {
+      io?.to(`user:${targetUserId}`).emit('call_answered', {
+        callId,
+        answererId: senderId,
+      });
+    }
+  } else if (action === 'decline') {
+    if (targetUserId) {
+      io?.to(`user:${targetUserId}`).emit('call_declined', {
+        callId,
+        declinerId: senderId,
+      });
+      await sendCallEndedFCM(targetUserId, callId);
+    }
+  } else if (action === 'end') {
+    if (targetUserId) {
+      io?.to(`user:${targetUserId}`).emit('call_ended', { callId, enderId: senderId });
+      await sendCallEndedFCM(targetUserId, callId);
+    }
+    if (groupId) {
+      io?.to(`group:${groupId}`).emit('call_ended', { callId, enderId: senderId });
+    }
+  }
 }

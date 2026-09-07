@@ -35,10 +35,12 @@ export async function POST(request: NextRequest) {
         const roomId = message.group
           ? `group:${message.group.toString()}`
           : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
-        io.to(roomId).emit('message_reaction', {
+        const payloadData = {
           messageId,
           reactions: message.reactions,
-        });
+        };
+        io.to(roomId).emit('reaction_updated', payloadData);
+        io.to(roomId).emit('message_reaction', payloadData);
       }
     } catch (_) {}
 
@@ -70,7 +72,9 @@ export async function DELETE(request: NextRequest) {
         const roomId = message.group
           ? `group:${message.group.toString()}`
           : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
-        io.to(roomId).emit('message_reaction', { messageId, reactions: message.reactions });
+        const payloadData = { messageId, reactions: message.reactions };
+        io.to(roomId).emit('reaction_updated', payloadData);
+        io.to(roomId).emit('message_reaction', payloadData);
       }
     } catch (_) {}
 

@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
 /* =====================================================
    NOVIX MESSENGER — MODERN RESPONSIVE DESIGN SYSTEM
    ===================================================== */
@@ -13,16 +23,56 @@
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --accent: #4f46e5;
+
+  /* Admin Theme Tokens (Light Mode) */
+  --admin-bg: #f8fafc;
+  --admin-sidebar: #ffffff;
+  --admin-surface: #ffffff;
+  --admin-card: #ffffff;
+  --admin-card-hover: #f8fafc;
+  --admin-border: #e2e8f0;
+  --admin-border-subtle: #f1f5f9;
+  --admin-text-primary: #0f172a;
+  --admin-text-secondary: #475569;
+  --admin-text-muted: #94a3b8;
+  --admin-input-bg: #ffffff;
+  --admin-input-border: #cbd5e1;
+}
+
+.dark {
+  --bg: #090d16;
+  --card: #0f172a;
+  --border: #1e293b;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --accent: #6366f1;
+
+  /* Admin Theme Tokens (Dark Mode) */
+  --admin-bg: #080c15;
+  --admin-sidebar: #0d1322;
+  --admin-surface: #0f172a;
+  --admin-card: #111a2e;
+  --admin-card-hover: #16223b;
+  --admin-border: rgba(255, 255, 255, 0.08);
+  --admin-border-subtle: rgba(255, 255, 255, 0.04);
+  --admin-text-primary: #f8fafc;
+  --admin-text-secondary: #94a3b8;
+  --admin-text-muted: #64748b;
+  --admin-input-bg: #0d1322;
+  --admin-input-border: #1e293b;
 }
 
 body {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
+  background-color: var(--bg);
+  color: var(--text);
   font-family: var(--font-geist-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* Force basic reset */
@@ -45,19 +95,31 @@ body {
   border-radius: 9999px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 /* ==================== SHARED UTILITIES ==================== */
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.dark .card {
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
 }
 
 .card-glass {
@@ -68,21 +130,26 @@ body {
   border-radius: 16px;
 }
 
+.dark .card-glass {
+  background: rgba(17, 26, 46, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .input {
-  background-color: #ffffff;
-  border: 1px solid #cbd5e1;
+  background-color: var(--admin-input-bg);
+  border: 1px solid var(--admin-input-border);
   border-radius: 12px;
   padding: 10px 14px;
   width: 100%;
   font-size: 14px;
-  color: #0f172a;
+  color: var(--admin-text-primary);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .input:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 .btn {
@@ -114,15 +181,14 @@ body {
 }
 
 .btn-secondary {
-  background-color: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background-color: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
-  background-color: #f8fafc;
-  color: #0f172a;
-  border-color: #94a3b8;
+  background-color: var(--admin-card-hover);
+  border-color: var(--admin-border);
 }
 
 /* Tables & Responsive Wrappers */
@@ -131,7 +197,7 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
 }
 
 .table {
@@ -142,26 +208,26 @@ body {
 }
 
 .table th {
-  background-color: #f8fafc;
-  color: #64748b;
+  background-color: var(--admin-card-hover);
+  color: var(--admin-text-secondary);
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .table td {
   padding: 14px 16px;
   text-align: left;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid var(--admin-border-subtle);
+  color: var(--admin-text-primary);
 }
 
 .table tr:hover td {
-  background-color: #f8fafc;
+  background-color: var(--admin-card-hover);
 }
 
 /* Status dots */
@@ -173,4 +239,3 @@ body {
 }
 .status-online { background-color: #10b981; }
 .status-offline { background-color: #94a3b8; }
-

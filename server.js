@@ -2,6 +2,13 @@ const path = require('path');
 const dotenv = require('dotenv');
 const dns = require('dns');
 
+// Configure reliable DNS servers to prevent Windows querySrv ECONNREFUSED on MongoDB Atlas SRV records
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (e) {
+  console.warn('Could not set custom DNS servers:', e);
+}
+
 // Force IPv4 resolution to prevent ETIMEDOUT issues on local environments/ISPs that do not support IPv6 SMTP
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');

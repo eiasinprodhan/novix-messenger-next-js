@@ -11,15 +11,43 @@ export async function GET(request: NextRequest) {
     const payload = getUserFromRequest(request);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const Message = (await import('@/models/Message')).default;
+
     const groups = await Group.find({
       'members.user': payload.userId,
       isActive: true,
     })
       .populate('members.user', 'name username avatar isOnline')
       .populate('createdBy', 'name username')
+      .populate('pinnedMessage')
       .sort({ updatedAt: -1 });
 
-    return NextResponse.json({ groups });
+    const enrichedGroups = await Promise.all(
+      groups.map(async (groupDoc) => {
+        const groupObj = groupDoc.toObject() as any;
+
+        const lastMsg = await Message.findOne({
+          group: groupDoc._id,
+          isDeleted: false,
+        })
+          .sort({ createdAt: -1 })
+          .populate('sender', 'name username avatar')
+          .lean();
+
+        const unreadCount = await Message.countDocuments({
+          group: groupDoc._id,
+          sender: { $ne: payload.userId },
+          readBy: { $ne: payload.userId },
+          isDeleted: false,
+        });
+
+        groupObj.lastMessage = lastMsg || null;
+        groupObj.unreadCount = unreadCount;
+        return groupObj;
+      })
+    );
+
+    return NextResponse.json({ groups: enrichedGroups });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
   }

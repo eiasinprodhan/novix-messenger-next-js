@@ -20,9 +20,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Message not found' }, { status: 404 });
     }
 
-    // Only sender can delete
-    if (message.sender.toString() !== payload.userId) {
-      return NextResponse.json({ error: 'You can only delete your own messages' }, { status: 403 });
+    // Sender can delete, or if in a group, group admin/creator can delete
+    let canDelete = message.sender.toString() === payload.userId;
+    if (!canDelete && message.group) {
+      const groupObj = await Group.findById(message.group);
+      if (groupObj) {
+        const isCreator = (groupObj.createdBy?._id || groupObj.createdBy)?.toString() === payload.userId;
+        const isAdmin = groupObj.members.some(
+          (m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId && m.role === 'admin'
+        );
+        canDelete = isCreator || isAdmin;
+      }
+    }
+
+    if (!canDelete) {
+      return NextResponse.json({ error: 'You are not authorized to delete this message' }, { status: 403 });
     }
 
     message.isDeleted = true;
@@ -61,16 +73,16 @@ export async function PATCH(
 
     const { action } = await request.json(); // 'pin' or 'unpin'
 
-    const message = await Message.findById(id);
+    const message = await Message.findById(id).populate('sender', 'name username avatar');
     if (!message) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
 
     // Only participants can pin
     let isParticipant = false;
     if (message.group) {
       const groupObj = await Group.findById(message.group);
-      isParticipant = groupObj ? groupObj.members.some((m: any) => m.user.toString() === payload.userId) : false;
+      isParticipant = groupObj ? groupObj.members.some((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId) : false;
     } else {
-      isParticipant = [message.sender.toString(), message.receiver?.toString() || ''].includes(payload.userId);
+      isParticipant = [message.sender?.toString() || '', message.receiver?.toString() || ''].includes(payload.userId);
     }
     if (!isParticipant) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -78,6 +90,17 @@ export async function PATCH(
 
     message.isPinned = action === 'pin';
     await message.save();
+
+    let updatedPinnedMessage: any = null;
+    if (message.group) {
+      if (action === 'pin') {
+        await Group.findByIdAndUpdate(message.group, { pinnedMessage: message._id });
+        updatedPinnedMessage = message.toObject();
+      } else {
+        await Group.findByIdAndUpdate(message.group, { $unset: { pinnedMessage: 1 } });
+        updatedPinnedMessage = null;
+      }
+    }
 
     // Broadcast
     try {
@@ -90,11 +113,13 @@ export async function PATCH(
         io.to(roomId).emit('message_pinned', {
           messageId: id,
           isPinned: message.isPinned,
+          groupId: message.group ? message.group.toString() : null,
+          pinnedMessage: updatedPinnedMessage,
         });
       }
     } catch (_) {}
 
-    return NextResponse.json({ success: true, isPinned: message.isPinned });
+    return NextResponse.json({ success: true, isPinned: message.isPinned, pinnedMessage: updatedPinnedMessage });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to pin/unpin message' }, { status: 500 });
   }

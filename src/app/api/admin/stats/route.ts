@@ -65,6 +65,42 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .limit(5);
 
+    // Compute 7-day time series trends
+    const now = new Date();
+    const last7Days: { dateStr: string; label: string }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+      last7Days.push({ dateStr, label });
+    }
+
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const messageAgg = await Message.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+    ]);
+    const messageCountMap = new Map(messageAgg.map((m: any) => [m._id, m.count]));
+
+    const userAgg = await User.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+    ]);
+    const userCountMap = new Map(userAgg.map((u: any) => [u._id, u.count]));
+
+    const messageTrends = last7Days.map(({ dateStr, label }) => ({
+      date: dateStr,
+      label,
+      messages: messageCountMap.get(dateStr) || 0,
+    }));
+
+    const userTrends = last7Days.map(({ dateStr, label }) => ({
+      date: dateStr,
+      label,
+      users: userCountMap.get(dateStr) || 0,
+    }));
+
     return NextResponse.json({
       stats: {
         totalUsers: totalRegularUsers,
@@ -80,6 +116,8 @@ export async function GET(request: NextRequest) {
         pendingReports,
         resolvedReports,
       },
+      messageTrends,
+      userTrends,
       recentUsers,
       recentLogs,
       recentReports,

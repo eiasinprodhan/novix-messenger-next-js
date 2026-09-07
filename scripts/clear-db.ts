@@ -1,3 +1,6 @@
+import dns from 'dns';
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
@@ -10,6 +13,9 @@ async function clearDB() {
     const Friendship = (await import('../src/models/Friendship')).default;
     const Group = (await import('../src/models/Group')).default;
     const Message = (await import('../src/models/Message')).default;
+    const Story = (await import('../src/models/Story')).default;
+    const AuditLog = (await import('../src/models/AuditLog')).default;
+    const Report = (await import('../src/models/Report')).default;
 
     console.log('⏳ Connecting to MongoDB...');
     await connectDB();
@@ -27,6 +33,15 @@ async function clearDB() {
 
     const deletedMessages = await Message.deleteMany({});
     console.log(`❌ Deleted ${deletedMessages.deletedCount} messages.`);
+
+    const deletedStories = await Story.deleteMany({});
+    console.log(`❌ Deleted ${deletedStories.deletedCount} stories.`);
+
+    const deletedAuditLogs = await AuditLog.deleteMany({});
+    console.log(`❌ Deleted ${deletedAuditLogs.deletedCount} audit logs.`);
+
+    const deletedReports = await Report.deleteMany({});
+    console.log(`❌ Deleted ${deletedReports.deletedCount} reports.`);
 
     console.log('✅ Database cleared successfully!');
   } catch (err: any) {

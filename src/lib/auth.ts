@@ -14,6 +14,11 @@ export function generateAccessToken(payload: JwtPayload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
 }
 
+// 7-day long-lived admin access token to prevent session expiry during management operations
+export function generateAdminAccessToken(payload: JwtPayload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+}
+
 // 30-day rolling refresh token
 export function generateRefreshToken(payload: JwtPayload) {
   return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d' });
@@ -26,6 +31,8 @@ export function verifyAccessToken(token: string): JwtPayload | null {
     return null;
   }
 }
+
+export const verifyAuthToken = verifyAccessToken;
 
 export function verifyRefreshToken(token: string): JwtPayload | null {
   try {

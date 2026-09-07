@@ -1,26 +1,21 @@
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { sendVerificationEmail } from '../src/lib/mailer';
 
-// Load env configuration
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-
-async function testMail() {
-  // Dynamically import mailer after env config is loaded
-  const { sendVerificationEmail } = await import('../src/lib/mailer');
-  const targetEmail = 'cyberloomittechnologies@gmail.com';
-  console.log('Sending test verification code to:', targetEmail);
-
+async function test() {
+  const testRecipient = process.env.GMAIL_USER || 'test@example.com';
+  console.log(`Sending test email to ${testRecipient}...`);
   try {
-    await sendVerificationEmail(targetEmail, '123456');
-    console.log('Test function execution finished.');
-  } catch (error) {
-    console.error('Failed to run test function:', error);
+    await sendVerificationEmail(testRecipient, '123456');
+    console.log('✅ Test email sent successfully!');
+  } catch (err: any) {
+    console.error('❌ Failed to send test email:', err.message || err);
+  } finally {
+    process.exit(0);
   }
 }
 
-testMail();
+test();

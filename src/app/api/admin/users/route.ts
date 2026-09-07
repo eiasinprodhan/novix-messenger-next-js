@@ -32,8 +32,6 @@ export async function GET(request: NextRequest) {
     }
     if (role) {
       filter.role = role;
-    } else {
-      filter.role = { $ne: 'admin' };
     }
 
     const skip = (page - 1) * limit;

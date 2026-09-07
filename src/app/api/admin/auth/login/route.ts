@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { generateAdminAccessToken, generateRefreshToken } from '@/lib/auth';
 
 function corsHeaders() {
   return {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accessToken = generateAccessToken({
+    const accessToken = generateAdminAccessToken({
       userId: user._id.toString(),
       email: user.email,
       role: user.role,

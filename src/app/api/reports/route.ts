@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Report from '@/models/Report';
 import User from '@/models/User';
+import SystemSetting from '@/models/SystemSetting';
 import { getUserFromRequest } from '@/lib/auth';
+import { sendAdminNotificationEmail } from '@/lib/mailer';
 
 // POST /api/reports — submit a user report
 export async function POST(request: NextRequest) {
@@ -80,6 +82,34 @@ export async function POST(request: NextRequest) {
     // Populate for response
     await report.populate('reporter', 'name username avatar');
     await report.populate('reported', 'name username avatar');
+
+    // Non-blocking Admin Alert Email
+    SystemSetting.findOne({ key: 'platform_settings' })
+      .lean()
+      .then((settingDoc: any) => {
+        const settings = settingDoc?.value || {};
+        if (settings.adminNotificationEmail && settings.notifyOnNewReport !== false) {
+          sendAdminNotificationEmail({
+            to: settings.adminNotificationEmail,
+            subject: `[Novix Alert] New Moderation Report: ${report.reason}`,
+            title: 'Moderation Report Filed',
+            badgeText: 'Action Required',
+            message: `A user has filed a content moderation report that requires administrative review.`,
+            metadataItems: [
+              { label: 'Reason', value: report.reason },
+              { label: 'Reporter', value: (report.reporter as any)?.name || 'Anonymous' },
+              { label: 'Reported User', value: (report.reported as any)?.name || reportedUserId },
+              { label: 'Report Details', value: report.message || 'No additional notes provided' },
+              { label: 'Timestamp', value: new Date().toUTCString() },
+            ],
+          }).catch((mailErr) => {
+            console.error('[Admin Report Notification Error]', mailErr);
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('[Admin Report Settings Query Error]', err);
+      });
 
     return NextResponse.json(
       {

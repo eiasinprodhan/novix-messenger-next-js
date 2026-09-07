@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { generateOTP, sendVerificationEmail } from '@/lib/mailer';
+import SystemSetting from '@/models/SystemSetting';
+import { generateOTP, sendVerificationEmail, sendAdminNotificationEmail } from '@/lib/mailer';
 
 import { getCountryFromRequest } from '@/lib/ipCountry';
 
@@ -83,6 +84,32 @@ export async function POST(request: NextRequest) {
       .catch((emailErr: any) => {
         console.error('>>> [REGISTER] Email send failed:', emailErr.message);
       });
+
+    // Notify Administrator if enabled
+    SystemSetting.findOne({ key: 'platform_settings' })
+      .then((setting) => {
+        const settings = setting?.value;
+        const targetEmail = settings?.adminNotificationEmail || process.env.ADMIN_NOTIFY_EMAIL;
+        const shouldNotify = settings?.notifyOnNewUser !== false;
+
+        if (targetEmail && shouldNotify) {
+          sendAdminNotificationEmail({
+            to: targetEmail,
+            subject: `New User Registration: ${user.name} (@${user.username})`,
+            title: 'New User Registered',
+            badgeText: 'USER REGISTRATION',
+            message: `A new user account was registered on Novix Messenger.`,
+            metadataItems: [
+              { label: 'Full Name', value: user.name },
+              { label: 'Username', value: `@${user.username}` },
+              { label: 'Email Address', value: user.email },
+              { label: 'Country', value: user.country || 'Unknown' },
+              { label: 'Server Time', value: new Date().toUTCString() },
+            ],
+          }).catch((err: any) => console.error('>>> [REGISTER] Admin notification email failed:', err.message));
+        }
+      })
+      .catch((err: any) => console.error('>>> [REGISTER] Failed to check admin settings:', err.message));
 
     console.log('>>> [REGISTER] SUCCESS for', user.email, '— awaiting verification');
 

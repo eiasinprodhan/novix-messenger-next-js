@@ -22,9 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'groupId is required' }, { status: 400 });
     }
 
-    // Verify membership
+    // Verify membership safely
     const group = await Group.findById(groupId);
-    if (!group || !group.members.some((m: any) => m.user.toString() === payload.userId)) {
+    if (!group || !group.members.some((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId)) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
     }
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       .populate({
         path: 'replyTo',
         select: 'content sender type imageUrl',
-        populate: { path: 'sender', select: 'name' }
+        populate: { path: 'sender', select: 'name username' }
       });
 
     return NextResponse.json({ messages: messages.reverse() });
@@ -84,16 +84,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'groupId and content/image required' }, { status: 400 });
     }
 
-    // Verify membership
+    // Verify membership safely
     const group = await Group.findById(groupId);
-    if (!group || !group.members.some((m: any) => m.user.toString() === payload.userId)) {
+    if (!group || !group.members.some((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId)) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
     }
 
     const message = await Message.create({
       sender: payload.userId,
       group: groupId,
-      content: content || '',
+      content: content?.trim() || (content || ''),
       type,
       imageUrl: imageUrl || null,
       status: 'sent',
@@ -101,17 +101,40 @@ export async function POST(request: NextRequest) {
       readBy: [payload.userId], // sender has read their own message
     });
 
-    const populated = await message.populate('sender', 'name username avatar');
+    // Populate sender and replyTo
+    const populated = await message.populate([
+      { path: 'sender', select: 'name username avatar' },
+      {
+        path: 'replyTo',
+        select: 'content sender type imageUrl',
+        populate: { path: 'sender', select: 'name username' }
+      }
+    ]);
 
-    // Emit real-time to group room
+    // Bump group updatedAt so it sorts to top of chat lists
+    await Group.findByIdAndUpdate(groupId, { updatedAt: new Date() });
+
+    // Emit real-time to group room AND to each member's personal user room
     try {
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
+        const msgObj = populated.toObject();
         io.to(`group:${groupId}`).emit('new_group_message', {
-          message: populated.toObject(),
+          message: msgObj,
           groupId,
         });
+
+        // Also emit to all member user rooms so home screen and notifications update in real-time
+        for (const m of group.members) {
+          const mId = (m.user?._id || m.user || m)?.toString();
+          if (mId && mId !== payload.userId) {
+            io.to(`user:${mId}`).emit('new_group_message', {
+              message: msgObj,
+              groupId,
+            });
+          }
+        }
       }
     } catch (_) {}
 
@@ -129,8 +152,8 @@ export async function POST(request: NextRequest) {
           : `${senderName}: ${content || ''}`;
 
         const memberIds: string[] = group.members
-          .map((m: any) => m.user?.toString() ?? m.toString())
-          .filter((id: string) => id !== payload.userId);
+          .map((m: any) => (m.user?._id || m.user || m)?.toString())
+          .filter((id: string) => id && id !== payload.userId);
 
         const offlineMembers = memberIds.filter((id) => !isUserOnline(id));
 
