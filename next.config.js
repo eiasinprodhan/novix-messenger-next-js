@@ -10,6 +10,12 @@ const nextConfig = {
         pathname: '/uploads/**',
       },
       {
+        protocol: 'http',
+        hostname: '130.210.13.242',
+        port: '3000',
+        pathname: '/uploads/**',
+      },
+      {
         protocol: 'https',
         hostname: 'novix-messenger-next-js.onrender.com',
         pathname: '/uploads/**',
