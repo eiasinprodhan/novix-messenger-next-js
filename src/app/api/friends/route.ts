@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
           name: otherUser.name,
           username: otherUser.username,
           avatar: otherUser.avatar,
+          country: otherUser.country,
           isOnline: otherUser.isOnline,
           lastSeen: otherUser.lastSeen,
           role: otherUser.role,

@@ -655,6 +655,7 @@ export default function NovixHome() {
           <div className="flex flex-wrap justify-center gap-6 text-sm font-semibold text-slate-600 dark:text-slate-400">
             <Link href="#features" className="hover:text-blue-600 dark:hover:text-white transition">Features</Link>
             <Link href="#interactive-chat" className="hover:text-blue-600 dark:hover:text-white transition">Live Preview</Link>
+            <Link href="/child-safety" className="hover:text-blue-600 dark:hover:text-white transition">Child Safety</Link>
             <Link href="/terms" className="hover:text-blue-600 dark:hover:text-white transition">Terms of Service</Link>
             <Link href="/privacy" className="hover:text-blue-600 dark:hover:text-white transition">Privacy Policy</Link>
             <Link href="/delete-account" className="hover:text-red-600 dark:hover:text-red-400 transition">Delete Account</Link>

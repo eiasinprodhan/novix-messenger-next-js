@@ -148,6 +148,7 @@ export default function PrivacyPage() {
 
         {/* Footer links */}
         <div style={{ marginTop: 48, paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <Link href="/child-safety" style={{ color: '#60a5fa', fontSize: 14, textDecoration: 'none' }}>Child Safety Standards →</Link>
           <Link href="/terms" style={{ color: '#60a5fa', fontSize: 14, textDecoration: 'none' }}>Terms &amp; Conditions →</Link>
           <Link href="/delete-account" style={{ color: '#60a5fa', fontSize: 14, textDecoration: 'none' }}>Delete Account →</Link>
           <Link href="/" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textDecoration: 'none' }}>← Back to Home</Link>
