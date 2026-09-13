@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get('groupId');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const before = searchParams.get('before');
+    const topicId = searchParams.get('topicId');
 
     if (!groupId) {
       return NextResponse.json({ error: 'groupId is required' }, { status: 400 });
@@ -52,10 +54,26 @@ export async function GET(request: NextRequest) {
       }
     } catch (_) {}
 
-    const messages = await Message.find({
+    const query: any = {
       group: groupId,
       isDeleted: false,
-    })
+    };
+
+    if (topicId) {
+      query.topicId = topicId;
+    }
+
+    if (before) {
+      if (before.match(/^[0-9a-fA-F]{24}$/)) {
+        const refMsg = await Message.findById(before).select('createdAt');
+        if (refMsg) query.createdAt = { $lt: refMsg.createdAt };
+      } else {
+        const parsedDate = new Date(before);
+        if (!isNaN(parsedDate.getTime())) query.createdAt = { $lt: parsedDate };
+      }
+    }
+
+    const messages = await Message.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('sender', 'name username avatar')
@@ -78,10 +96,21 @@ export async function POST(request: NextRequest) {
     const payload = getUserFromRequest(request);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { groupId, content, type = 'text', imageUrl, replyTo } = await request.json();
+    const {
+      groupId,
+      content,
+      type = 'text',
+      imageUrl,
+      replyTo,
+      forwardFrom,
+      attachments,
+      poll,
+      topicId,
+      expiresAt,
+    } = await request.json();
 
-    if (!groupId || (!content && !imageUrl)) {
-      return NextResponse.json({ error: 'groupId and content/image required' }, { status: 400 });
+    if (!groupId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
+      return NextResponse.json({ error: 'groupId and content/attachments/poll required' }, { status: 400 });
     }
 
     // Verify membership safely
@@ -98,6 +127,11 @@ export async function POST(request: NextRequest) {
       imageUrl: imageUrl || null,
       status: 'sent',
       replyTo: replyTo || null,
+      forwardFrom: forwardFrom || undefined,
+      attachments: attachments || [],
+      poll: poll || undefined,
+      topicId: topicId || undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       readBy: [payload.userId], // sender has read their own message
     });
 

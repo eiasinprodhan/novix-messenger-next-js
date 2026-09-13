@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const friendId = searchParams.get('friendId');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const before = searchParams.get('before');
 
     if (!friendId) {
       return NextResponse.json({ error: 'friendId is required' }, { status: 400 });
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     const sortedIds = [payload.userId, friendId].sort().join('_');
-    const cacheKey = `chat:${sortedIds}:messages:limit:${limit}`;
+    const cacheKey = `chat:${sortedIds}:messages:limit:${limit}:${before || 'latest'}`;
     const cachedData = await getCache<{ messages: any[] }>(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData);
@@ -77,25 +78,37 @@ export async function GET(request: NextRequest) {
       // ignore socket errors
     }
 
-    const messages = await Message.find({
+    const query: any = {
       $or: [
         { sender: payload.userId, receiver: friendId },
         { sender: friendId, receiver: payload.userId },
       ],
       isDeleted: false,
       deletedBy: { $ne: payload.userId },
-    })
+    };
+
+    if (before) {
+      if (before.match(/^[0-9a-fA-F]{24}$/)) {
+        const refMsg = await Message.findById(before).select('createdAt');
+        if (refMsg) query.createdAt = { $lt: refMsg.createdAt };
+      } else {
+        const parsedDate = new Date(before);
+        if (!isNaN(parsedDate.getTime())) query.createdAt = { $lt: parsedDate };
+      }
+    }
+
+    const messages = await Message.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('sender', 'name username avatar')
       .populate({
         path: 'replyTo',
         select: 'content sender type imageUrl',
-        populate: { path: 'sender', select: 'name username' }
+        populate: { path: 'sender', select: 'name username' },
       });
 
     const finalResponse = { messages: messages.reverse() };
-    await setCache(cacheKey, finalResponse, 600); // cache messages for 10 minutes
+    await setCache(cacheKey, finalResponse, 120);
 
     return NextResponse.json(finalResponse);
   } catch (error) {
@@ -113,9 +126,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { receiverId, content, type = 'text', imageUrl, replyTo } = await request.json();
+    const {
+      receiverId,
+      content,
+      type = 'text',
+      imageUrl,
+      replyTo,
+      forwardFrom,
+      attachments,
+      poll,
+      topicId,
+      expiresAt,
+    } = await request.json();
 
-    if (!receiverId || (!content && !imageUrl)) {
+    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -154,7 +178,7 @@ export async function POST(request: NextRequest) {
               token: receiverUser.fcmToken,
               notification: {
                 title: senderUser?.name || 'New Message',
-                body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : (content || ''),
+                body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
               },
               data: {
                 type: 'message',
@@ -186,6 +210,11 @@ export async function POST(request: NextRequest) {
       imageUrl: imageUrl || null,
       status: initialStatus,
       replyTo: replyTo || null,
+      forwardFrom: forwardFrom || undefined,
+      attachments: attachments || [],
+      poll: poll || undefined,
+      topicId: topicId || undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     });
 
     const populated = await message.populate('sender', 'name username avatar');
