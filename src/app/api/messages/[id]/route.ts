@@ -42,7 +42,8 @@ export async function DELETE(
     }
 
     // Delete for everyone: Sender can delete, or if in a group, group admin/creator can delete
-    let canDelete = message.sender.toString() === payload.userId;
+    const currentMsgSenderId = (message.sender?._id || message.sender)?.toString() || message.senderId;
+    let canDelete = currentMsgSenderId === payload.userId;
     if (!canDelete && message.group) {
       const groupObj = await Group.findById(message.group);
       if (groupObj) {
@@ -68,10 +69,18 @@ export async function DELETE(
       const { getIO } = await import('@/lib/socket');
       const io = getIO();
       if (io) {
-        const roomId = message.group
-          ? `group:${message.group.toString()}`
-          : [message.sender.toString(), message.receiver?.toString() || ''].sort().join('_');
-        io.to(roomId).emit('message_deleted', { messageId: id });
+        const senderId = (message.sender?._id || message.sender)?.toString() || message.senderId || '';
+        const receiverId = (message.receiver?._id || message.receiver)?.toString() || message.receiverId || '';
+        const groupId = message.group ? (message.group?._id || message.group)?.toString() : null;
+
+        if (groupId) {
+          io.to(`group:${groupId}`).emit('message_deleted', { messageId: id, groupId });
+        } else {
+          const roomId = [senderId, receiverId].filter(Boolean).sort().join('_');
+          io.to(roomId).emit('message_deleted', { messageId: id });
+          if (receiverId) io.to(`user:${receiverId}`).emit('message_deleted', { messageId: id });
+          if (senderId) io.to(`user:${senderId}`).emit('message_deleted', { messageId: id });
+        }
       }
     } catch (_) {}
 
