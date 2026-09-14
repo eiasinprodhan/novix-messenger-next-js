@@ -160,15 +160,24 @@ export class UserModel {
 
   async save(): Promise<this> {
     const db = getDB();
-    if (this.password && !this.password.startsWith('$2')) {
-      this.password = await bcrypt.hash(this.password, 10);
+    const existing = db.prepare('SELECT id, password FROM users WHERE id = ?').get(this.id) as any;
+
+    let passwordToSave: string | null = null;
+    if (this.password !== undefined && this.password !== null && this.password !== '') {
+      if (!this.password.startsWith('$2')) {
+        this.password = await bcrypt.hash(this.password, 10);
+      }
+      passwordToSave = this.password;
       this._originalPassword = this.password;
+    } else if (this._originalPassword) {
+      passwordToSave = this._originalPassword;
+    } else if (existing && existing.password) {
+      passwordToSave = existing.password;
     }
 
     const now = new Date().toISOString();
     this.updatedAt = new Date();
 
-    const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(this.id);
     if (!existing) {
       db.prepare(`
         INSERT INTO users (
@@ -186,7 +195,7 @@ export class UserModel {
           ?, ?, ?, ?, ?, ?, ?
         )
       `).run(
-        this.id, this.name, this.username, this.email, this.password || null, this.bio || '', this.avatar || '', this.gender || null, this.country || '', this.birthday ? this.birthday.toISOString() : null,
+        this.id, this.name, this.username, this.email, passwordToSave, this.bio || '', this.avatar || '', this.gender || null, this.country || '', this.birthday ? this.birthday.toISOString() : null,
         this.isVerified ? 1 : 0, this.verificationCode || null, this.verificationCodeExpires ? this.verificationCodeExpires.toISOString() : null, this.verificationResendAt ? this.verificationResendAt.toISOString() : null,
         this.resetPasswordCode || null, this.resetPasswordCodeExpires ? this.resetPasswordCodeExpires.toISOString() : null, this.pendingEmail || null, this.pendingEmailCode || null,
         this.pendingEmailCodeExpires ? this.pendingEmailCodeExpires.toISOString() : null, this.pendingEmailResendAt ? this.pendingEmailResendAt.toISOString() : null, this.googleId || null, this.lastSeen.toISOString(), this.lastActiveAt.toISOString(),
@@ -206,7 +215,7 @@ export class UserModel {
           devices_json = ?, updated_at = ?
         WHERE id = ?
       `).run(
-        this.name, this.username, this.email, this.password || null, this.bio || '', this.avatar || '', this.gender || null, this.country || '', this.birthday ? this.birthday.toISOString() : null,
+        this.name, this.username, this.email, passwordToSave, this.bio || '', this.avatar || '', this.gender || null, this.country || '', this.birthday ? this.birthday.toISOString() : null,
         this.isVerified ? 1 : 0, this.verificationCode || null, this.verificationCodeExpires ? this.verificationCodeExpires.toISOString() : null, this.verificationResendAt ? this.verificationResendAt.toISOString() : null,
         this.resetPasswordCode || null, this.resetPasswordCodeExpires ? this.resetPasswordCodeExpires.toISOString() : null, this.pendingEmail || null, this.pendingEmailCode || null,
         this.pendingEmailCodeExpires ? this.pendingEmailCodeExpires.toISOString() : null, this.pendingEmailResendAt ? this.pendingEmailResendAt.toISOString() : null, this.googleId || null, this.lastSeen.toISOString(), this.lastActiveAt.toISOString(),
@@ -273,9 +282,7 @@ export class UserModel {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     });
-    if (selectPassword) {
-      user._originalPassword = row.password;
-    }
+    user._originalPassword = row.password;
     return user;
   }
 
@@ -1154,6 +1161,53 @@ export class MessageModel {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     });
+  }
+
+  /**
+   * Mongoose-compatible populate shim.
+   * The messages route calls `message.populate('sender', ...)` after `Message.create()`.
+   * Since formatMessage() already eagerly loads sender and replyTo, this is a no-op
+   * for the common case — but we still honour the call to avoid TypeError crashes.
+   */
+  async populate(fieldOrPaths: any, _select?: string): Promise<this> {
+    const paths: any[] = Array.isArray(fieldOrPaths)
+      ? fieldOrPaths
+      : [{ path: typeof fieldOrPaths === 'string' ? fieldOrPaths : fieldOrPaths?.path, select: _select }];
+
+    for (const p of paths) {
+      const pathName: string = typeof p === 'string' ? p : (p?.path ?? '');
+      if (pathName === 'sender') {
+        const uid = this.senderId || (this.sender as any)?._id?.toString?.() || (this.sender as any)?.toString?.();
+        if (uid && typeof this.sender !== 'object') {
+          const u = await UserModel.findById(uid);
+          if (u) {
+            this.sender = {
+              _id: u.id, id: u.id,
+              name: u.name, username: u.username, avatar: u.avatar || '',
+            };
+          }
+        }
+      } else if (pathName === 'replyTo' && this.replyToId && !this.replyTo) {
+        try {
+          const db = getDB();
+          const parentRow = db.prepare(
+            'SELECT id, sender_id, content, type, image_url FROM messages WHERE id = ?'
+          ).get(this.replyToId) as any;
+          if (parentRow) {
+            const parentSender = await UserModel.findById(parentRow.sender_id);
+            this.replyTo = {
+              id: parentRow.id, _id: parentRow.id,
+              senderId: parentRow.sender_id,
+              sender: parentSender || { _id: parentRow.sender_id, name: 'User' },
+              content: parentRow.content || '',
+              type: parentRow.type || 'text',
+              imageUrl: parentRow.image_url,
+            };
+          }
+        } catch {}
+      }
+    }
+    return this;
   }
 }
 

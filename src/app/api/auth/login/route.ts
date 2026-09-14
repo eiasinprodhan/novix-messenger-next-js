@@ -24,13 +24,20 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const { email, password } = await request.json();
-    console.log('>>> [LOGIN] email:', email);
+    const identifier = (email || '').trim();
+    console.log('>>> [LOGIN] identifier:', identifier);
 
-    if (!email || !password) {
+    if (!identifier || !password) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400, headers: corsHeaders() });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // Support login by email OR username (case-insensitive)
+    const user = await User.findOne({
+      $or: [
+        { email: identifier.toLowerCase() },
+        { username: identifier.toLowerCase() },
+      ],
+    }).select('+password');
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders() });
     }

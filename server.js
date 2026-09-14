@@ -1,6 +1,7 @@
 const path = require('path');
 const dotenv = require('dotenv');
 const dns = require('dns');
+const fs = require('fs');
 
 // Configure reliable DNS servers to prevent Windows querySrv ECONNREFUSED on MongoDB Atlas SRV records
 try {
@@ -34,6 +35,20 @@ const app = next({
 });
 
 const handle = app.getRequestHandler();
+
+/** Simple MIME-type lookup for common media/file types */
+function getMimeType(filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const mimes = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+    mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+    mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+    pdf: 'application/pdf', zip: 'application/zip',
+    txt: 'text/plain', json: 'application/json',
+  };
+  return mimes[ext] || 'application/octet-stream';
+}
 
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
@@ -71,6 +86,37 @@ app.prepare().then(() => {
         res.end();
         return;
       }
+
+      // ─── Direct file streaming for runtime-uploaded media ────────────────
+      // Next.js static asset cache does NOT pick up files written to /public at
+      // runtime — they only appear after a rebuild. We intercept /uploads/ and
+      // /transit_uploads/ here and stream directly from disk so profile pictures,
+      // story images, and message attachments are available immediately.
+      if (req.method === 'GET') {
+        const pathname = parsedUrl.pathname;
+        let diskPath = null;
+        if (pathname.startsWith('/uploads/')) {
+          const filename = pathname.slice('/uploads/'.length);
+          if (filename && !filename.includes('..')) {
+            diskPath = path.join(process.cwd(), 'public', 'uploads', filename);
+          }
+        } else if (pathname.startsWith('/transit_uploads/')) {
+          const filename = pathname.slice('/transit_uploads/'.length);
+          if (filename && !filename.includes('..')) {
+            diskPath = path.join(process.cwd(), 'public', 'transit_uploads', filename);
+          }
+        }
+        if (diskPath && fs.existsSync(diskPath)) {
+          const stat = fs.statSync(diskPath);
+          res.setHeader('Content-Type', getMimeType(diskPath));
+          res.setHeader('Content-Length', stat.size);
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          res.statusCode = 200;
+          fs.createReadStream(diskPath).pipe(res);
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       await handle(req, res);
     } catch (err) {
