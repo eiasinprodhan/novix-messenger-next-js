@@ -162,6 +162,7 @@ function initTables(db: Database.Database) {
       media_url TEXT NOT NULL,
       type TEXT DEFAULT 'image',
       caption TEXT DEFAULT '',
+      is_archived INTEGER DEFAULT 0,
       views_json TEXT DEFAULT '[]',
       reactions_json TEXT DEFAULT '[]',
       created_at TEXT,
@@ -228,6 +229,18 @@ function initTables(db: Database.Database) {
     }
     if (!groupColNames.includes('auto_delete_seconds')) {
       db.exec("ALTER TABLE groups ADD COLUMN auto_delete_seconds INTEGER DEFAULT 0;");
+    }
+
+    const storyCols = db.pragma("table_info(stories)") as Array<{ name: string }>;
+    const storyColNames = storyCols.map(c => c.name);
+    if (!storyColNames.includes('is_archived')) {
+      db.exec("ALTER TABLE stories ADD COLUMN is_archived INTEGER DEFAULT 0;");
+    }
+    if (!storyColNames.includes('caption')) {
+      db.exec("ALTER TABLE stories ADD COLUMN caption TEXT DEFAULT '';");
+    }
+    if (!storyColNames.includes('type')) {
+      db.exec("ALTER TABLE stories ADD COLUMN type TEXT DEFAULT 'image';");
     }
   } catch (e) {
     console.error("Migration check warning:", e);

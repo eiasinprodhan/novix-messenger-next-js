@@ -156,20 +156,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Friendship not found' }, { status: 404 });
     }
 
+    const reqId = (friendship.requester?._id || friendship.requester?.id || friendship.requester)?.toString();
+    const recId = (friendship.recipient?._id || friendship.recipient?.id || friendship.recipient)?.toString();
+
     // Verify current user is part of this friendship
-    if (
-      friendship.requester.toString() !== payload.userId &&
-      friendship.recipient.toString() !== payload.userId
-    ) {
+    if (reqId !== payload.userId && recId !== payload.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    await Friendship.findByIdAndDelete(friendship._id);
+    await Friendship.findByIdAndDelete(friendship.id || friendship._id);
 
-    const firstUser = friendship.requester.toString();
-    const secondUser = friendship.recipient.toString();
-    await invalidateFriendsCache(firstUser);
-    await invalidateFriendsCache(secondUser);
+    if (reqId) await invalidateFriendsCache(reqId);
+    if (recId) await invalidateFriendsCache(recId);
+
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        if (reqId) io.to(`user:${reqId}`).emit('friend_request_declined', { friendshipId: friendship.id || friendship._id });
+        if (recId) io.to(`user:${recId}`).emit('friend_request_declined', { friendshipId: friendship.id || friendship._id });
+      }
+    } catch (_) {}
 
     return NextResponse.json({ success: true, message: 'Friend request/friendship removed successfully' });
   } catch (error) {

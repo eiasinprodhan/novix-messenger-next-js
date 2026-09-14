@@ -149,6 +149,10 @@ export class UserModel {
     return true;
   }
 
+  toString(): string {
+    return this.id;
+  }
+
   async comparePassword(candidate: string): Promise<boolean> {
     if (!this.password) return false;
     return bcrypt.compare(candidate, this.password);
@@ -506,6 +510,10 @@ export class FriendshipModel {
     return this;
   }
 
+  toString(): string {
+    return this.id;
+  }
+
   toObject(): any {
     return { ...this };
   }
@@ -519,6 +527,14 @@ export class FriendshipModel {
       const db = getDB();
       let sql = 'SELECT * FROM friendships WHERE 1=1';
       const params: any[] = [];
+
+      if (query._id) {
+        sql += ' AND id = ?';
+        params.push(query._id.toString());
+      } else if (query.id) {
+        sql += ' AND id = ?';
+        params.push(query.id.toString());
+      }
 
       if (query.$or && Array.isArray(query.$or)) {
         const orClauses: string[] = [];
@@ -575,6 +591,32 @@ export class FriendshipModel {
       const list = await this.find(query);
       return list.length > 0 ? list[0] : null;
     });
+  }
+
+  static findById(id: string): QueryChain<any> {
+    return new QueryChain(async () => {
+      const db = getDB();
+      const r: any = db.prepare('SELECT * FROM friendships WHERE id = ?').get(id);
+      if (!r) return null;
+      const requester = await UserModel.findById(r.requester_id);
+      const recipient = await UserModel.findById(r.recipient_id);
+      return new FriendshipModel({
+        _id: r.id,
+        id: r.id,
+        requester: requester || r.requester_id,
+        recipient: recipient || r.recipient_id,
+        status: r.status,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      });
+    });
+  }
+
+  static async findByIdAndDelete(id: string): Promise<any> {
+    const db = getDB();
+    const existing = await this.findById(id);
+    db.prepare('DELETE FROM friendships WHERE id = ?').run(id);
+    return existing;
   }
 
   static async create(data: any): Promise<any> {
@@ -1120,76 +1162,247 @@ export class StoryModel {
   public _id: string;
   public id: string;
   public user: any;
+  public userId: string;
   public imageUrl: string;
+  public mediaUrl: string;
+  public type: string;
+  public caption: string;
   public isArchived: boolean;
   public views: any[];
+  public viewers: any[];
   public reactions: any[];
   public createdAt: Date;
 
   constructor(data: any = {}) {
     this._id = data._id?.toString() || data.id?.toString() || generateId();
     this.id = this._id;
-    this.user = data.user;
-    this.imageUrl = data.imageUrl || '';
-    this.isArchived = Boolean(data.isArchived);
-    this.views = Array.isArray(data.views) ? data.views : [];
+    this.userId = data.userId || (data.user?._id || data.user)?.toString() || '';
+    this.user = data.user || this.userId;
+    this.imageUrl = data.imageUrl || data.mediaUrl || data.media_url || '';
+    this.mediaUrl = this.imageUrl;
+    this.type = data.type || 'image';
+    this.caption = data.caption || '';
+    this.isArchived = Boolean(data.isArchived ?? data.is_archived);
+    this.views = Array.isArray(data.views) ? data.views : (Array.isArray(data.viewers) ? data.viewers : []);
+    this.viewers = this.views;
     this.reactions = Array.isArray(data.reactions) ? data.reactions : [];
     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
   }
 
   async save(): Promise<this> {
     const db = getDB();
-    const uid = this.user?._id?.toString() || this.user?.toString();
+    const uid = this.userId || (this.user?._id || this.user)?.toString();
+    const viewsJson = JSON.stringify(this.viewers || this.views || []);
+    const reactionsJson = JSON.stringify(this.reactions || []);
+    const isArch = this.isArchived ? 1 : 0;
+    const createdAtStr = this.createdAt.toISOString();
+
     db.prepare(`
-      INSERT INTO stories (id, user_id, media_url, views_json, reactions_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET views_json = excluded.views_json, reactions_json = excluded.reactions_json
-    `).run(this.id, uid, this.imageUrl, JSON.stringify(this.views), JSON.stringify(this.reactions), this.createdAt.toISOString());
+      INSERT INTO stories (id, user_id, media_url, type, caption, is_archived, views_json, reactions_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        media_url = excluded.media_url,
+        type = excluded.type,
+        caption = excluded.caption,
+        is_archived = excluded.is_archived,
+        views_json = excluded.views_json,
+        reactions_json = excluded.reactions_json
+    `).run(this.id, uid, this.imageUrl, this.type, this.caption, isArch, viewsJson, reactionsJson, createdAtStr);
     return this;
   }
 
-  static find(query: any = {}): QueryChain<any[]> {
-    return new QueryChain(async () => {
-      const db = getDB();
-      const rows = db.prepare('SELECT * FROM stories ORDER BY created_at DESC').all();
-      return Promise.all(
-        rows.map(async (r: any) => {
-          const user = await UserModel.findById(r.user_id);
-          return new StoryModel({
-            _id: r.id,
-            id: r.id,
-            user,
-            imageUrl: r.media_url,
-            views: JSON.parse(r.views_json || '[]'),
-            reactions: JSON.parse(r.reactions_json || '[]'),
-            createdAt: r.created_at,
-          });
-        })
-      );
-    });
+  async populate(fieldOrPaths: any, select?: string): Promise<this> {
+    const paths = Array.isArray(fieldOrPaths) ? fieldOrPaths : [{ path: fieldOrPaths, select }];
+    for (const p of paths) {
+      const pathName = typeof p === 'string' ? p : p.path;
+      if (pathName === 'user') {
+        const uId = this.userId || (this.user?._id || this.user)?.toString();
+        if (uId) {
+          const u = await UserModel.findById(uId);
+          if (u) {
+            this.user = {
+              _id: u.id,
+              id: u.id,
+              name: u.name,
+              username: u.username,
+              avatar: u.avatar || '',
+            };
+          }
+        }
+      } else if (pathName === 'viewers' || pathName === 'views') {
+        const populatedViewers = await Promise.all(
+          (this.viewers || []).map(async (v: any) => {
+            const vId = (v?._id || v)?.toString();
+            if (!vId) return v;
+            const u = await UserModel.findById(vId);
+            return u ? { _id: u.id, id: u.id, name: u.name, username: u.username, avatar: u.avatar || '' } : v;
+          })
+        );
+        this.viewers = populatedViewers;
+        this.views = populatedViewers;
+      } else if (pathName === 'reactions.user') {
+        const populatedReactions = await Promise.all(
+          (this.reactions || []).map(async (r: any) => {
+            const uId = (r.user?._id || r.user)?.toString();
+            if (!uId) return r;
+            const u = await UserModel.findById(uId);
+            return {
+              ...r,
+              user: u ? { _id: u.id, id: u.id, name: u.name, username: u.username, avatar: u.avatar || '' } : r.user,
+            };
+          })
+        );
+        this.reactions = populatedReactions;
+      }
+    }
+    return this;
   }
 
-  static findById(id: string): QueryChain<any> {
-    return new QueryChain(async () => {
+  toObject(): any {
+    return {
+      _id: this.id,
+      id: this.id,
+      user: this.user,
+      imageUrl: this.imageUrl,
+      mediaUrl: this.mediaUrl,
+      type: this.type,
+      caption: this.caption,
+      isArchived: this.isArchived,
+      views: this.views,
+      viewers: this.viewers,
+      reactions: this.reactions,
+      createdAt: this.createdAt,
+    };
+  }
+
+  toJSON(): any {
+    return this.toObject();
+  }
+
+  static async create(data: any): Promise<StoryModel> {
+    const story = new StoryModel(data);
+    await story.save();
+    return story;
+  }
+
+  static findById(id: string): QueryChain<StoryModel | null> {
+    return new QueryChain(async (chain) => {
       const db = getDB();
       const row: any = db.prepare('SELECT * FROM stories WHERE id = ?').get(id);
       if (!row) return null;
-      const user = await UserModel.findById(row.user_id);
-      return new StoryModel({
-        _id: row.id,
-        id: row.id,
-        user,
-        imageUrl: row.media_url,
-        views: JSON.parse(row.views_json || '[]'),
-        reactions: JSON.parse(row.reactions_json || '[]'),
-        createdAt: row.created_at,
-      });
+      const story = StoryModel.fromRow(row);
+      if (chain.populateFields.length > 0) {
+        for (const popArgs of chain.populateFields) {
+          await story.populate(popArgs[0], popArgs[1]);
+        }
+      }
+      return story;
+    });
+  }
+
+  static async findByIdAndDelete(id: string): Promise<any> {
+    const db = getDB();
+    const existing = await this.findById(id);
+    db.prepare('DELETE FROM stories WHERE id = ?').run(id);
+    return existing;
+  }
+
+  static async deleteOne(query: any = {}): Promise<any> {
+    const db = getDB();
+    if (query._id || query.id) {
+      const id = (query._id || query.id).toString();
+      return db.prepare('DELETE FROM stories WHERE id = ?').run(id);
+    }
+  }
+
+  static fromRow(r: any): StoryModel {
+    return new StoryModel({
+      _id: r.id,
+      id: r.id,
+      userId: r.user_id,
+      user: r.user_id,
+      imageUrl: r.media_url,
+      mediaUrl: r.media_url,
+      type: r.type || 'image',
+      caption: r.caption || '',
+      isArchived: Boolean(r.is_archived),
+      views: JSON.parse(r.views_json || '[]'),
+      viewers: JSON.parse(r.views_json || '[]'),
+      reactions: JSON.parse(r.reactions_json || '[]'),
+      createdAt: r.created_at,
+    });
+  }
+
+  static find(query: any = {}): QueryChain<StoryModel[]> {
+    return new QueryChain(async (chain) => {
+      const db = getDB();
+      let sql = 'SELECT * FROM stories WHERE 1=1';
+      const params: any[] = [];
+
+      if (query.user) {
+        if (query.user.$in && Array.isArray(query.user.$in)) {
+          const placeholders = query.user.$in.map(() => '?').join(',');
+          sql += ` AND user_id IN (${placeholders})`;
+          params.push(...query.user.$in.map((u: any) => u.toString()));
+        } else if (query.user.$nin && Array.isArray(query.user.$nin)) {
+          const placeholders = query.user.$nin.map(() => '?').join(',');
+          sql += ` AND user_id NOT IN (${placeholders})`;
+          params.push(...query.user.$nin.map((u: any) => u.toString()));
+        } else {
+          sql += ' AND user_id = ?';
+          params.push(query.user.toString());
+        }
+      }
+
+      if (query.isArchived !== undefined) {
+        sql += ' AND is_archived = ?';
+        params.push(query.isArchived ? 1 : 0);
+      }
+
+      if (query.createdAt && query.createdAt.$gte) {
+        const dateStr = new Date(query.createdAt.$gte).toISOString();
+        sql += ' AND created_at >= ?';
+        params.push(dateStr);
+      }
+
+      if (chain.sortCriteria) {
+        const [field, dir] = Object.entries(chain.sortCriteria)[0];
+        const col = field === 'createdAt' ? 'created_at' : field;
+        sql += ` ORDER BY ${col} ${dir === -1 || dir === 'desc' ? 'DESC' : 'ASC'}`;
+      } else {
+        sql += ' ORDER BY created_at ASC';
+      }
+
+      if (chain.limitVal) {
+        sql += ` LIMIT ${chain.limitVal}`;
+      }
+
+      const rows: any[] = db.prepare(sql).all(...params);
+      const stories = rows.map((r) => StoryModel.fromRow(r));
+
+      for (const s of stories) {
+        await s.populate('user');
+        if (chain.populateFields.length > 0) {
+          for (const popArgs of chain.populateFields) {
+            await s.populate(popArgs[0], popArgs[1]);
+          }
+        }
+      }
+
+      return stories;
     });
   }
 
   static async countDocuments(query: any = {}): Promise<number> {
     const db = getDB();
-    const row: any = db.prepare('SELECT COUNT(*) as count FROM stories').get();
+    let sql = 'SELECT COUNT(*) as count FROM stories WHERE 1=1';
+    const params: any[] = [];
+    if (query.user && query.user.$nin && Array.isArray(query.user.$nin)) {
+      const placeholders = query.user.$nin.map(() => '?').join(',');
+      sql += ` AND user_id NOT IN (${placeholders})`;
+      params.push(...query.user.$nin.map((u: any) => u.toString()));
+    }
+    const row: any = db.prepare(sql).get(...params);
     return row?.count || 0;
   }
 }

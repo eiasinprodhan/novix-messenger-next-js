@@ -8,10 +8,10 @@ export async function GET(
 ) {
   try {
     const { filename } = await params;
-    let filePath = path.join(process.cwd(), 'public', 'uploads', filename);
+    let filePath = path.join(process.cwd(), 'public', 'transit_uploads', filename);
 
     if (!fs.existsSync(filePath)) {
-      filePath = path.join(process.cwd(), 'public', 'transit_uploads', filename);
+      filePath = path.join(process.cwd(), 'public', 'uploads', filename);
     }
 
     if (!fs.existsSync(filePath)) {
@@ -90,7 +90,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error serving file:', error);
+    console.error('Error serving transit file:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

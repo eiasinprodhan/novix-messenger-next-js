@@ -33,22 +33,25 @@ export async function POST(request: NextRequest) {
     const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
     const filename = `enc_${timestamp}_${Math.random().toString(36).substring(7)}.${ext}`;
 
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!existsSync(uploadsDir)) {
+      await mkdir(uploadsDir, { recursive: true });
+    }
+    await writeFile(path.join(uploadsDir, filename), buffer);
+
     if (!existsSync(transitDir)) {
       await mkdir(transitDir, { recursive: true });
     }
+    await writeFile(path.join(transitDir, filename), buffer);
 
-    const filePath = path.join(transitDir, filename);
-    await writeFile(filePath, buffer);
-
-    // Provide ephemeral transit URL
-    const imageUrl = `/transit_uploads/${filename}`;
+    const imageUrl = `/uploads/${filename}`;
 
     return NextResponse.json({
       success: true,
       imageUrl,
+      url: imageUrl,
       filename,
       size: file.size,
-      isEphemeral: true,
     });
   } catch (error) {
     console.error('Upload error:', error);

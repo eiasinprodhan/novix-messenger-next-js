@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { imageUrl } = await request.json();
+    const body = await request.json();
+    const imageUrl = body.imageUrl || body.mediaUrl;
     if (!imageUrl) {
       return NextResponse.json({ error: 'Missing imageUrl' }, { status: 400 });
     }
@@ -21,8 +22,11 @@ export async function POST(request: NextRequest) {
     const story = await Story.create({
       user: payload.userId,
       imageUrl,
+      type: body.type || 'image',
+      caption: body.caption || '',
       isArchived: false,
       reactions: [],
+      viewers: [],
     });
 
     const populated = await story.populate('user', 'name username avatar');
