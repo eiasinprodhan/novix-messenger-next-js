@@ -46,12 +46,10 @@ const nextConfig = {
       },
     ];
   },
+  serverExternalPackages: ['better-sqlite3', 'ioredis'],
   typescript: {
     // Prevents Next.js OOM during the memory-heavy typecheck phase on 1GB VPS
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 };
 
