@@ -23,7 +23,7 @@ export async function POST(
       if (!story.viewers) {
         story.viewers = [];
       }
-      if (!story.viewers.some((vId) => vId.toString() === payload.userId)) {
+      if (!story.viewers.some((vId: any) => vId.toString() === payload.userId)) {
         story.viewers.push(payload.userId as any);
         await story.save();
       }

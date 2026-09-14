@@ -21,6 +21,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 const { createServer } = require('http');
 const next = require('next');
 const { initSocketServer } = require('./src/lib/socket');
+const { startBackgroundCleanup } = require('./src/lib/cron');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -84,6 +85,9 @@ app.prepare().then(() => {
 
   // Initialize Socket.IO
   initSocketServer(server);
+
+  // Initialize Zero-Store Ephemeral Media and Message Cleaner
+  startBackgroundCleanup();
 
   server.listen(port, hostname, () => {
     console.log('\n====================================');

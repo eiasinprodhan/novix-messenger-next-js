@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    const friendIds = friendships.map((f) =>
+    const friendIds = friendships.map((f: any) =>
       f.requester.toString() === payload.userId ? f.recipient.toString() : f.requester.toString()
     );
 

@@ -1,31 +1,17 @@
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import { AuditLogModel } from './sqlite-models';
 
-export interface IAuditLog extends Document {
-  admin: mongoose.Types.ObjectId;
+export interface IAuditLog {
+  _id: string;
+  id: string;
+  admin: any;
   action: string;
   targetType?: string;
   targetId?: string;
   details?: any;
   ipAddress?: string;
   createdAt: Date;
+  save(): Promise<any>;
 }
 
-const AuditLogSchema: Schema<IAuditLog> = new Schema(
-  {
-    admin: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    action: { type: String, required: true },
-    targetType: { type: String },
-    targetId: { type: String },
-    details: { type: Schema.Types.Mixed },
-    ipAddress: { type: String, default: '' },
-  },
-  { timestamps: { createdAt: true, updatedAt: false } }
-);
-
-AuditLogSchema.index({ createdAt: -1 });
-
-const AuditLog: Model<IAuditLog> =
-  mongoose.models.AuditLog ||
-  mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
-
+const AuditLog: any = AuditLogModel;
 export default AuditLog;

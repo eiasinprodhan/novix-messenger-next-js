@@ -4,7 +4,6 @@ import User from '@/models/User';
 import AuditLog from '@/models/AuditLog';
 import { getUserFromRequest } from '@/lib/auth';
 
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import Message from '@/models/Message';
 import Friendship from '@/models/Friendship';
@@ -18,7 +17,7 @@ export async function GET(
     await connectDB();
     const { id } = await params;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
     }
 
@@ -48,7 +47,7 @@ export async function PATCH(
     await connectDB();
     const { id } = await params;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
     }
 
@@ -145,7 +144,7 @@ export async function DELETE(
     await connectDB();
     const { id } = await params;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
     }
 

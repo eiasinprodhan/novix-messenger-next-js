@@ -107,6 +107,8 @@ export async function POST(request: NextRequest) {
       poll,
       topicId,
       expiresAt,
+      isSilent = false,
+      scheduledFor,
     } = await request.json();
 
     if (!groupId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
@@ -115,8 +117,50 @@ export async function POST(request: NextRequest) {
 
     // Verify membership safely
     const group = await Group.findById(groupId);
-    if (!group || !group.members.some((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId)) {
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const memberObj = group.members.find((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId);
+    if (!memberObj) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+    }
+
+    const isCreator = (group.createdBy?._id || group.createdBy)?.toString() === payload.userId;
+    const isAdmin = memberObj.role === 'admin' || isCreator;
+
+    // Check permissions for regular members
+    if (!isAdmin && group.permissions) {
+      if (group.permissions.canSendMessages === false) {
+        return NextResponse.json({ error: 'Sending messages is restricted in this group' }, { status: 403 });
+      }
+      if ((imageUrl || attachments?.length) && group.permissions.canSendMedia === false) {
+        return NextResponse.json({ error: 'Sending media is restricted in this group' }, { status: 403 });
+      }
+    }
+
+    // Check slow mode cooldown for regular members
+    if (!isAdmin && group.slowModeSeconds && group.slowModeSeconds > 0) {
+      const lastMessage = await Message.findOne({
+        group: groupId,
+        sender: payload.userId,
+      });
+
+      if (lastMessage) {
+        const diffSecs = (Date.now() - new Date(lastMessage.createdAt).getTime()) / 1000;
+        if (diffSecs < group.slowModeSeconds) {
+          const waitTime = Math.ceil(group.slowModeSeconds - diffSecs);
+          return NextResponse.json({
+            error: `Slow mode is active. Please wait ${waitTime}s before sending another message.`,
+            waitSeconds: waitTime,
+          }, { status: 429 });
+        }
+      }
+    }
+
+    let calculatedExpiresAt = expiresAt ? new Date(expiresAt) : undefined;
+    if (!calculatedExpiresAt && group.autoDeleteSeconds && group.autoDeleteSeconds > 0) {
+      calculatedExpiresAt = new Date(Date.now() + group.autoDeleteSeconds * 1000);
     }
 
     const message = await Message.create({
@@ -131,7 +175,9 @@ export async function POST(request: NextRequest) {
       attachments: attachments || [],
       poll: poll || undefined,
       topicId: topicId || undefined,
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      isSilent: Boolean(isSilent),
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
+      expiresAt: calculatedExpiresAt,
       readBy: [payload.userId], // sender has read their own message
     });
 

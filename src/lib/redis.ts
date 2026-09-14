@@ -15,7 +15,7 @@ try {
       if (times > 2) {
         isRedisAvailable = false;
         if (!hasLoggedError) {
-          console.warn('⚠️ Redis is unreachable. Falling back to MongoDB.');
+          console.warn('⚠️ Redis is unreachable. Falling back to SQLite.');
           hasLoggedError = true;
         }
         return null;
@@ -33,13 +33,13 @@ try {
   redis.on('error', (err) => {
     isRedisAvailable = false;
     if (!hasLoggedError) {
-      console.warn('⚠️ Redis connection unavailable (using MongoDB fallback):', err.message);
+      console.warn('⚠️ Redis connection unavailable (using SQLite fallback):', err.message);
       hasLoggedError = true;
     }
   });
 } catch (error) {
   if (!hasLoggedError) {
-    console.warn('⚠️ Redis not configured, falling back to MongoDB.');
+    console.warn('⚠️ Redis not configured, falling back to SQLite.');
     hasLoggedError = true;
   }
   redis = null;

@@ -32,6 +32,9 @@ export async function GET(
   }
 }
 
+const getUserId = (u: any) =>
+  u?._id?.toString() || u?.id?.toString() || (typeof u === 'string' ? u : u?.toString());
+
 // DELETE group
 export async function DELETE(
   request: NextRequest,
@@ -48,13 +51,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Only the creator can delete the group
-    if (group.createdBy.toString() !== payload.userId) {
-      return NextResponse.json({ error: 'Only the creator can delete this group' }, { status: 403 });
+    const creatorId = getUserId(group.createdBy);
+    const currentUserMember = group.members?.find((m: any) => getUserId(m.user) === payload.userId);
+    const isAdmin = currentUserMember?.role === 'admin' || creatorId === payload.userId;
+
+    if (!isAdmin && creatorId !== payload.userId) {
+      return NextResponse.json({ error: 'Only group admins or the creator can delete this group' }, { status: 403 });
     }
 
     group.isActive = false;
+    group.members = [];
     await group.save();
+
+    const db = (await import('@/lib/sqlite')).getDB();
+    db.prepare('DELETE FROM group_members WHERE group_id = ?').run(id);
+    db.prepare('UPDATE groups SET is_active = 0, updated_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+
+    const io = (global as any).socketio;
+    if (io) {
+      io.to(`group:${id}`).emit('group_deleted', { groupId: id });
+    }
 
     return NextResponse.json({ success: true, message: 'Group deleted successfully' });
   } catch (error: any) {
@@ -78,21 +94,20 @@ export async function PUT(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Check membership and admin permissions
-    const currentUserMember = group.members.find(
-      (m: any) => m.user.toString() === payload.userId
-    );
-    if (!currentUserMember) {
+    const creatorId = getUserId(group.createdBy);
+    const currentUserMember = group.members?.find((m: any) => getUserId(m.user) === payload.userId);
+    const isCreator = creatorId === payload.userId;
+    const isAdmin = currentUserMember?.role === 'admin' || isCreator;
+
+    if (!currentUserMember && !isCreator) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
     }
 
-    const isCreator = group.createdBy.toString() === payload.userId;
-    const isAdmin = currentUserMember.role === 'admin' || isCreator;
     if (!isAdmin) {
       return NextResponse.json({ error: 'Only group admins can update group details' }, { status: 403 });
     }
 
-    const { name, description, avatar, hideMembers, groupType, topicsEnabled, pinnedMessageId, autoApprove } = await request.json();
+    const { name, description, avatar, hideMembers, groupType, topicsEnabled, pinnedMessageId, autoApprove, slowModeSeconds, permissions, autoDeleteSeconds } = await request.json();
 
     if (name !== undefined) {
       if (!name || name.trim().length < 2) {
@@ -127,6 +142,18 @@ export async function PUT(
 
     if (autoApprove !== undefined) {
       group.autoApprove = Boolean(autoApprove);
+    }
+
+    if (slowModeSeconds !== undefined) {
+      group.slowModeSeconds = Number(slowModeSeconds);
+    }
+
+    if (permissions !== undefined) {
+      group.permissions = { ...group.permissions, ...permissions };
+    }
+
+    if (autoDeleteSeconds !== undefined) {
+      group.autoDeleteSeconds = Number(autoDeleteSeconds);
     }
 
     await group.save();

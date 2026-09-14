@@ -65,8 +65,7 @@ export async function GET(request: NextRequest) {
         .sort({ createdAt: -1 })
         .select('content createdAt sender type imageUrl status');
 
-      // For admin chats: only include if there's at least one message
-      if (isAdminChat && !lastMessage) return null;
+      // For admin chats: allow connection even when messages are stored on-device
 
       // Get unread message count (sent by otherUser to current user and status is not read)
       const unreadCount = await Message.countDocuments({

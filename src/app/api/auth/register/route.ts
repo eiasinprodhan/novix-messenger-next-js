@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Notify Administrator if enabled
     SystemSetting.findOne({ key: 'platform_settings' })
-      .then((setting) => {
+      .then((setting: any) => {
         const settings = setting?.value;
         const targetEmail = settings?.adminNotificationEmail || process.env.ADMIN_NOTIFY_EMAIL;
         const shouldNotify = settings?.notifyOnNewUser !== false;

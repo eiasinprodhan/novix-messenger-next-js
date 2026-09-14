@@ -32,14 +32,14 @@ export async function POST(
         role: 'member',
         joinedAt: new Date(),
       });
-      group.pendingRequests = group.pendingRequests.filter(
-        (uId) => uId.toString() !== payload.userId
+      group.pendingRequests = (group.pendingRequests || []).filter(
+        (uId: any) => uId.toString() !== payload.userId
       );
       await group.save();
       return NextResponse.json({ joined: true, message: 'Joined group successfully' });
     } else {
-      const alreadyRequested = group.pendingRequests.some(
-        (uId) => uId.toString() === payload.userId
+      const alreadyRequested = (group.pendingRequests || []).some(
+        (uId: any) => uId.toString() === payload.userId
       );
       if (!alreadyRequested) {
         group.pendingRequests.push(payload.userId as any);

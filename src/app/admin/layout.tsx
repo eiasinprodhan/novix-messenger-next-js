@@ -327,7 +327,7 @@ function SidebarView({
             <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Server size={11} className="text-emerald-500" />
-                MongoDB + Sockets
+                SQLite WAL + Sockets
               </span>
               <span className="text-emerald-600 dark:text-emerald-400">99.98% SLA</span>
             </div>

@@ -1,38 +1,15 @@
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import { FriendshipModel } from './sqlite-models';
 
-export interface IFriendship extends Document {
-  requester: mongoose.Types.ObjectId;
-  recipient: mongoose.Types.ObjectId;
+export interface IFriendship {
+  _id: string;
+  id: string;
+  requester: any;
+  recipient: any;
   status: 'pending' | 'accepted' | 'rejected' | 'blocked';
   createdAt: Date;
   updatedAt: Date;
+  save(): Promise<any>;
 }
 
-const FriendshipSchema: Schema<IFriendship> = new Schema(
-  {
-    requester: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    recipient: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'accepted', 'rejected', 'blocked'],
-      default: 'pending',
-    },
-  },
-  { timestamps: true }
-);
-
-// Ensure no duplicate friendships
-FriendshipSchema.index({ requester: 1, recipient: 1 }, { unique: true });
-
-const Friendship: Model<IFriendship> =
-  mongoose.models.Friendship || mongoose.model<IFriendship>('Friendship', FriendshipSchema);
-
+const Friendship: any = FriendshipModel;
 export default Friendship;

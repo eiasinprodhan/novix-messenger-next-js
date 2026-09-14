@@ -52,7 +52,7 @@ cp .env.example .env.local
 
 Edit `.env.local`:
 ```env
-MONGODB_URI=mongodb://localhost:27017/novix_messenger
+DATABASE_URL=data/novix.db
 JWT_SECRET=your-super-secret-key
 JWT_REFRESH_SECRET=your-refresh-key
 ADMIN_EMAIL=admin@novix.com
@@ -65,9 +65,11 @@ NEXT_PUBLIC_API_URL=http://localhost:3000/api
 npm install
 ```
 
-### 3. Start MongoDB
-- Local: `mongod`
-- Or use MongoDB Atlas / Docker
+### 3. Initialize Database
+SQLite runs natively in WAL mode with zero external servers required:
+```bash
+npm run seed
+```
 
 ### 4. Run the App
 ```bash
