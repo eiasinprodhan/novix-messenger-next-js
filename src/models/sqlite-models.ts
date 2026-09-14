@@ -963,7 +963,14 @@ export class MessageModel {
   }
 
   toObject(): any {
-    return { ...this };
+    return {
+      ...this,
+      _id: this._id || this.id,
+      id: this.id || this._id,
+      senderId: this.senderId || (this.sender?._id?.toString() || this.sender?.toString()),
+      receiverId: this.receiverId || (this.receiver?._id?.toString() || this.receiver?.toString()),
+      receiver: this.receiver || this.receiverId,
+    };
   }
 
   toJSON(): any {
