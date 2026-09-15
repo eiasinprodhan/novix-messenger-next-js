@@ -102,12 +102,12 @@ export async function POST(request: NextRequest) {
               { label: 'Report Details', value: report.message || 'No additional notes provided' },
               { label: 'Timestamp', value: new Date().toUTCString() },
             ],
-          }).catch((mailErr: any) => {
+          }).catch((mailErr) => {
             console.error('[Admin Report Notification Error]', mailErr);
           });
         }
       })
-      .catch((err: any) => {
+      .catch((err) => {
         console.error('[Admin Report Settings Query Error]', err);
       });
 

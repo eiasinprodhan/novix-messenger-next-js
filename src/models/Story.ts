@@ -1,16 +1,57 @@
-import { StoryModel } from './sqlite-models';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export interface IStory {
-  _id: string;
-  id: string;
-  user: any;
+export interface IStory extends Document {
+  user: mongoose.Types.ObjectId;
   imageUrl: string;
   isArchived: boolean;
-  views: any[];
-  reactions: any[];
+  reactions: {
+    user: mongoose.Types.ObjectId;
+    reaction: string;
+  }[];
+  viewers: mongoose.Types.ObjectId[];
   createdAt: Date;
-  save(): Promise<any>;
+  updatedAt: Date;
 }
 
-const Story: any = StoryModel;
+const StorySchema: Schema<IStory> = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    imageUrl: {
+      type: String,
+      required: true,
+    },
+    isArchived: {
+      type: Boolean,
+      default: false,
+    },
+    reactions: [
+      {
+        user: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        reaction: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
+    viewers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+const Story: Model<IStory> =
+  mongoose.models.Story || mongoose.model<IStory>('Story', StorySchema);
+
 export default Story;

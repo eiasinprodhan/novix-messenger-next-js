@@ -23,12 +23,11 @@ export async function GET(request: NextRequest) {
       .sort({ updatedAt: -1 });
 
     const enrichedGroups = await Promise.all(
-      groups.map(async (groupDoc: any) => {
-        const groupObj = (groupDoc?.toObject ? groupDoc.toObject() : { ...groupDoc }) as any;
-        const groupId = groupDoc._id || groupDoc.id;
+      groups.map(async (groupDoc) => {
+        const groupObj = groupDoc.toObject() as any;
 
         const lastMsg = await Message.findOne({
-          group: groupId,
+          group: groupDoc._id,
           isDeleted: false,
         })
           .sort({ createdAt: -1 })
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest) {
           .lean();
 
         const unreadCount = await Message.countDocuments({
-          group: groupId,
+          group: groupDoc._id,
           sender: { $ne: payload.userId },
           readBy: { $ne: payload.userId },
           isDeleted: false,
@@ -49,8 +48,7 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.json({ groups: enrichedGroups });
-  } catch (error: any) {
-    console.error('Failed to fetch groups:', error);
+  } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
   }
 }

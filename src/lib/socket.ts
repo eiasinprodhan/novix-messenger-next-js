@@ -36,10 +36,6 @@ export function initSocketServer(server: NetServer) {
       credentials: true
     },
     allowEIO3: true,
-    pingInterval: 10000,
-    pingTimeout: 5000,
-    maxHttpBufferSize: 1e7,
-    perMessageDeflate: false,
   });
 
   (global as any).socketio = io;
@@ -48,8 +44,8 @@ export function initSocketServer(server: NetServer) {
   connectDB().then(() => {
     User.updateMany({}, { isOnline: false })
       .then(() => console.log('🔌 Cleared online status for all users in DB'))
-      .catch((err: any) => console.error('Failed to clear online status on startup:', err));
-  }).catch((err: any) => console.error('DB connection error on socket init:', err));
+      .catch((err) => console.error('Failed to clear online status on startup:', err));
+  }).catch((err) => console.error('DB connection error on socket init:', err));
 
   io.on('connection', (socket) => {
     console.log('🔌 Socket connected:', socket.id);
@@ -94,26 +90,6 @@ export function initSocketServer(server: NetServer) {
       socket.emit('authenticated', { success: true });
       console.log(`✅ User ${userId} authenticated`);
 
-      // Deliver any pending offline transit messages immediately
-      try {
-        await connectDB();
-        const pendingMsgs = await Message.find({ receiver: userId, isDelivered: false })
-          .sort({ createdAt: 1 })
-          .populate('sender', 'name username avatar');
-        
-        for (const pMsg of pendingMsgs) {
-          socket.emit('new_message', {
-            message: pMsg.toObject(),
-            from: (pMsg.sender as any)?._id?.toString() || pMsg.sender?.toString(),
-          });
-        }
-        if (pendingMsgs.length > 0) {
-          console.log(`📦 Flushed ${pendingMsgs.length} undelivered transit messages to user ${userId}`);
-        }
-      } catch (err) {
-        console.error('Failed to flush transit messages on auth:', err);
-      }
-
       // Automatically join all active groups for this user so they receive real-time messages anywhere
       try {
         await connectDB();
@@ -157,42 +133,6 @@ export function initSocketServer(server: NetServer) {
       // persistence and emits new_message via getIO(). Doing nothing here
       // prevents double-saves and duplicate messages.
       console.log('[socket] send_message received (relay-only, REST handles persistence)');
-    });
-
-    // DELIVERY ACKNOWLEDGMENT (WhatsApp Zero-Server-Storage model:
-    // Once recipient receives the message, client sends message_ack and server
-    // immediately deletes it from SQLite)
-    socket.on('message_ack', async (data: { messageId?: string; messageIds?: string[] }) => {
-      const recipientId = socket.data.userId;
-      const ids = data.messageIds || (data.messageId ? [data.messageId] : []);
-      if (!ids.length) return;
-
-      try {
-        await connectDB();
-        const Message = (await import('@/models/Message')).default;
-        const msgs = await Message.find({ _id: { $in: ids } }).select('_id sender receiver');
-        if (!msgs.length) return;
-
-        const idsToDelete = msgs.map((m: any) => m._id);
-        const senderSet = new Set<string>();
-        for (const m of msgs) {
-          if (m.sender) senderSet.add(m.sender.toString());
-        }
-
-        // Delete permanently from SQLite
-        await Message.deleteMany({ _id: { $in: idsToDelete } });
-
-        // Notify senders in real time
-        for (const senderId of senderSet) {
-          io?.to(`user:${senderId}`).emit('messages_delivered', {
-            receiverId: recipientId,
-            deliveredMessageIds: idsToDelete.map((id: any) => id.toString()),
-          });
-        }
-        console.log(`🗑️ [ZeroStore] Ack received: purged ${idsToDelete.length} delivered message(s) from server DB`);
-      } catch (err) {
-        console.error('Error handling message_ack in socket:', err);
-      }
     });
 
     // THEME CHANGE

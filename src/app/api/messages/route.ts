@@ -25,14 +25,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'friendId is required' }, { status: 400 });
     }
 
-    const isSelfChat = friendId === payload.userId;
-
-    // Check if either user is an admin or self chat
+    // Check if either user is an admin
     const currentUserObj = await User.findById(payload.userId).select('role');
-    const targetUserObj = isSelfChat ? currentUserObj : await User.findById(friendId).select('role');
+    const targetUserObj = await User.findById(friendId).select('role');
     const isAdminInvolved = currentUserObj?.role === 'admin' || targetUserObj?.role === 'admin';
 
-    if (!isAdminInvolved && !isSelfChat) {
+    if (!isAdminInvolved) {
       // Verify they are friends
       const friendship = await Friendship.findOne({
         $or: [
@@ -46,37 +44,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (!isSelfChat) {
-      // Mark messages sent by friendId to current user as 'read'
-      const updateResult = await Message.updateMany(
-        { sender: friendId, receiver: payload.userId, status: { $ne: 'read' } },
-        { status: 'read' }
-      );
+    // Mark messages sent by friendId to current user as 'read'
+    const updateResult = await Message.updateMany(
+      { sender: friendId, receiver: payload.userId, status: { $ne: 'read' } },
+      { status: 'read' }
+    );
 
-      if (updateResult.modifiedCount > 0) {
-        await invalidateFriendsCache(payload.userId);
-        await invalidateFriendsCache(friendId);
-        await invalidateChatCache(payload.userId, friendId);
-      }
+    if (updateResult.modifiedCount > 0) {
+      await invalidateFriendsCache(payload.userId);
+      await invalidateFriendsCache(friendId);
+      await invalidateChatCache(payload.userId, friendId);
     }
 
-    const sortedIds = isSelfChat ? payload.userId : [payload.userId, friendId].sort().join('_');
+    const sortedIds = [payload.userId, friendId].sort().join('_');
     const cacheKey = `chat:${sortedIds}:messages:limit:${limit}:${before || 'latest'}`;
     const cachedData = await getCache<{ messages: any[] }>(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData);
     }
 
-    const query: any = isSelfChat
-      ? { sender: payload.userId, receiver: payload.userId, isDeleted: false }
-      : {
-          $or: [
-            { sender: payload.userId, receiver: friendId },
-            { sender: friendId, receiver: payload.userId },
-          ],
-          isDeleted: false,
-          deletedBy: { $ne: payload.userId },
-        };
+    // Emit read receipt event via socket
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        const roomId = [payload.userId, friendId].sort().join('_');
+        io.to(roomId).emit('messages_read', {
+          readerId: payload.userId,
+          senderId: friendId,
+        });
+      }
+    } catch (e) {
+      // ignore socket errors
+    }
+
+    const query: any = {
+      $or: [
+        { sender: payload.userId, receiver: friendId },
+        { sender: friendId, receiver: payload.userId },
+      ],
+      isDeleted: false,
+      deletedBy: { $ne: payload.userId },
+    };
 
     if (before) {
       if (before.match(/^[0-9a-fA-F]{24}$/)) {
@@ -128,23 +137,18 @@ export async function POST(request: NextRequest) {
       poll,
       topicId,
       expiresAt,
-      encryptedPayload,
-      isSilent = false,
-      scheduledFor,
     } = await request.json();
 
-    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom && !encryptedPayload)) {
+    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const isSelfMessage = receiverId === payload.userId;
-
-    // Check if either user is an admin or sending to self (Saved Messages)
+    // Check if either user is an admin
     const senderUserObj = await User.findById(payload.userId).select('role');
-    const receiverUserObj = isSelfMessage ? senderUserObj : await User.findById(receiverId).select('role');
+    const receiverUserObj = await User.findById(receiverId).select('role');
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
-    if (!isAdminInvolved && !isSelfMessage) {
+    if (!isAdminInvolved) {
       // Verify friendship
       const friendship = await Friendship.findOne({
         $or: [
@@ -159,47 +163,44 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine initial status based on online state
-    let initialStatus: 'sent' | 'delivered' | 'read' = isSelfMessage ? 'read' : 'sent';
-    if (!isSelfMessage && !isSilent) {
-      try {
-        const { isUserOnline } = await import('@/lib/socket');
-        if (isUserOnline(receiverId)) {
-          initialStatus = 'delivered';
-        } else {
-          // Receiver is offline, send FCM push notification
-          const receiverUser = await User.findById(receiverId);
-          if (receiverUser?.fcmToken && messaging) {
-            const senderUser = await User.findById(payload.userId).select('name avatar');
-            try {
-              await messaging.send({
-                token: receiverUser.fcmToken,
+    let initialStatus: 'sent' | 'delivered' | 'read' = 'sent';
+    try {
+      const { isUserOnline } = await import('@/lib/socket');
+      if (isUserOnline(receiverId)) {
+        initialStatus = 'delivered';
+      } else {
+        // Receiver is offline, send FCM push notification
+        const receiverUser = await User.findById(receiverId);
+        if (receiverUser?.fcmToken && messaging) {
+          const senderUser = await User.findById(payload.userId).select('name avatar');
+          try {
+            await messaging.send({
+              token: receiverUser.fcmToken,
+              notification: {
+                title: senderUser?.name || 'New Message',
+                body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
+              },
+              data: {
+                type: 'message',
+                senderId: payload.userId,
+                senderName: senderUser?.name || '',
+                senderAvatar: senderUser?.avatar || '',
+              },
+              android: {
+                priority: 'high',
                 notification: {
-                  title: senderUser?.name || 'New Message',
-                  body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
+                  channelId: 'message_channel_id',
+                  icon: '@mipmap/ic_launcher',
                 },
-                data: {
-                  type: 'message',
-                  senderId: payload.userId,
-                  senderName: senderUser?.name || '',
-                  senderAvatar: senderUser?.avatar || '',
-                  silent: isSilent ? '1' : '0',
-                },
-                android: {
-                  priority: isSilent ? 'normal' : 'high',
-                  notification: {
-                    channelId: 'message_channel_id',
-                    icon: '@mipmap/ic_launcher',
-                  },
-                },
-              });
-              console.log(`[FCM] Push notification sent to ${receiverId}`);
-            } catch (fcmError) {
-              console.error('[FCM] Failed to send push notification:', fcmError);
-            }
+              },
+            });
+            console.log(`[FCM] Push notification sent to ${receiverId}`);
+          } catch (fcmError) {
+            console.error('[FCM] Failed to send push notification:', fcmError);
           }
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
     const message = await Message.create({
       sender: payload.userId,
@@ -213,48 +214,36 @@ export async function POST(request: NextRequest) {
       attachments: attachments || [],
       poll: poll || undefined,
       topicId: topicId || undefined,
-      isSilent: Boolean(isSilent),
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-      encryptedPayload: encryptedPayload || null,
-      isEphemeralTransit: !isSelfMessage, // Saved Messages persist in cloud
-      isDelivered: isSelfMessage || initialStatus === 'delivered',
     });
 
     const populated = await message.populate('sender', 'name username avatar');
 
     // Unhide chat for both users on new message
     await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
-    if (!isSelfMessage) {
-      await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
-      await invalidateFriendsCache(receiverId);
-    }
+    await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
 
     await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(receiverId);
     await invalidateChatCache(payload.userId, receiverId);
 
-    // Emit real-time event via socket (unless scheduled for future)
-    const isFutureScheduled = scheduledFor && new Date(scheduledFor).getTime() > Date.now();
-    if (!isFutureScheduled) {
-      try {
-        const { getIO } = await import('@/lib/socket');
-        const io = getIO();
-        if (io) {
-          const roomId = isSelfMessage ? payload.userId : [payload.userId, receiverId].sort().join('_');
-          io.to(roomId).emit('new_message', {
-            message: populated.toJSON(),
-            from: payload.userId,
-          });
-          if (!isSelfMessage) {
-            io.to(`user:${receiverId}`).emit('new_message', {
-              message: populated.toJSON(),
-              from: payload.userId,
-            });
-          }
-        }
-      } catch (e) {
-        // Socket not initialized yet - fine for REST fallback
+    // Emit real-time event via socket
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        const roomId = [payload.userId, receiverId].sort().join('_');
+        io.to(roomId).emit('new_message', {
+          message: populated.toObject(),
+          from: payload.userId,
+        });
+        io.to(`user:${receiverId}`).emit('new_message', {
+          message: populated.toObject(),
+          from: payload.userId,
+        });
       }
+    } catch (e) {
+      // Socket not initialized yet - fine for REST fallback
     }
 
     return NextResponse.json({

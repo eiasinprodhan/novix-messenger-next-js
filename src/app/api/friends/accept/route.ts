@@ -21,11 +21,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Friend request not found' }, { status: 404 });
     }
 
-    const recipientId = (friendship.recipient?._id || friendship.recipient?.id || friendship.recipient)?.toString();
-    const requesterId = (friendship.requester?._id || friendship.requester?.id || friendship.requester)?.toString();
-
     // Only the recipient can accept
-    if (recipientId !== payload.userId) {
+    if (friendship.recipient.toString() !== payload.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -36,17 +33,8 @@ export async function POST(request: NextRequest) {
     friendship.status = 'accepted';
     await friendship.save();
 
-    if (requesterId) await invalidateFriendsCache(requesterId);
-    if (recipientId) await invalidateFriendsCache(recipientId);
-
-    try {
-      const { getIO } = await import('@/lib/socket');
-      const io = getIO();
-      if (io) {
-        io.to(`user:${requesterId}`).emit('friend_request_accepted', { friendshipId, userId: recipientId });
-        io.to(`user:${recipientId}`).emit('friend_request_accepted', { friendshipId, userId: requesterId });
-      }
-    } catch (_) {}
+    await invalidateFriendsCache(friendship.requester.toString());
+    await invalidateFriendsCache(friendship.recipient.toString());
 
     return NextResponse.json({
       success: true,
@@ -55,7 +43,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Accept friend request error:', error);
     return NextResponse.json({ error: 'Failed to accept request' }, { status: 500 });
   }
 }

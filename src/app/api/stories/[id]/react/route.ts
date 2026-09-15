@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Story from '@/models/Story';
 import { getUserFromRequest } from '@/lib/auth';
@@ -24,15 +25,15 @@ export async function POST(
     }
 
     // Update reaction from this user or insert new reaction
-    const existingIndex = (story.reactions || []).findIndex(
-      (r: any) => r.user.toString() === payload.userId
+    const existingIndex = story.reactions.findIndex(
+      (r) => r.user.toString() === payload.userId
     );
 
     if (existingIndex > -1) {
       story.reactions[existingIndex].reaction = reaction;
     } else {
       story.reactions.push({
-        user: payload.userId as any,
+        user: new mongoose.Types.ObjectId(payload.userId) as any,
         reaction,
       });
     }

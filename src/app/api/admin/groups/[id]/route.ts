@@ -5,6 +5,7 @@ import User from '@/models/User';
 import AuditLog from '@/models/AuditLog';
 import { getUserFromRequest } from '@/lib/auth';
 
+import mongoose from 'mongoose';
 import Message from '@/models/Message';
 
 export async function DELETE(
@@ -15,7 +16,7 @@ export async function DELETE(
     await connectDB();
     const { id } = await params;
 
-    if (!id || typeof id !== 'string') {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid group ID format' }, { status: 400 });
     }
 

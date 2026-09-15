@@ -41,22 +41,17 @@ const nextConfig = {
         ],
       },
       {
-        source: '/transit_uploads/:path*',
-        headers: [
-          ...corsHeaders,
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-        ],
-      },
-      {
         source: '/api/:path*',
         headers: corsHeaders,
       },
     ];
   },
-  serverExternalPackages: ['better-sqlite3', 'ioredis'],
   typescript: {
     // Prevents Next.js OOM during the memory-heavy typecheck phase on 1GB VPS
     ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 

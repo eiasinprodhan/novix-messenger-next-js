@@ -41,21 +41,21 @@ export async function POST(request: NextRequest) {
     const allowMultiple = Boolean(message.poll.allowMultiple);
 
     // Find the target option
-    const targetOption = message.poll.options.find((opt: any) => opt.id === optionId);
+    const targetOption = message.poll.options.find((opt) => opt.id === optionId);
     if (!targetOption) {
       return NextResponse.json({ error: 'Option not found' }, { status: 404 });
     }
 
-    const userAlreadyVotedThisOption = targetOption.votes.some((v: any) => v.toString() === userIdStr);
+    const userAlreadyVotedThisOption = targetOption.votes.some((v) => v.toString() === userIdStr);
 
     if (userAlreadyVotedThisOption) {
       // Retract vote
-      targetOption.votes = targetOption.votes.filter((v: any) => v.toString() !== userIdStr);
+      targetOption.votes = targetOption.votes.filter((v) => v.toString() !== userIdStr);
     } else {
       // If single choice, remove vote from all other options first
       if (!allowMultiple) {
-        message.poll.options.forEach((opt: any) => {
-          opt.votes = opt.votes.filter((v: any) => v.toString() !== userIdStr);
+        message.poll.options.forEach((opt) => {
+          opt.votes = opt.votes.filter((v) => v.toString() !== userIdStr);
         });
       }
       targetOption.votes.push(userIdStr as any);

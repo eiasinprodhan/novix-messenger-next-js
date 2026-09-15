@@ -33,8 +33,8 @@ export async function POST(
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    group.pendingRequests = (group.pendingRequests || []).filter(
-      (uId: any) => uId.toString() !== userId
+    group.pendingRequests = group.pendingRequests.filter(
+      (uId) => uId.toString() !== userId
     );
 
     if (approve) {

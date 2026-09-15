@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch admin user IDs to filter out admin messages if needed
     const adminUsers = await User.find({ role: 'admin' }).select('_id');
-    const adminUserIds = adminUsers.map((u: any) => u._id);
+    const adminUserIds = adminUsers.map((u) => u._id);
 
     const totalMessages = await Message.countDocuments({
       sender: { $nin: adminUserIds },

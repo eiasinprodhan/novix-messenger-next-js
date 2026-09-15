@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
     // Fetch the requester's info to include in the socket event
     const requester = await User.findById(payload.userId).select('name username avatar');
 
-    // Notify the recipient and sender in real-time
+    // Notify the recipient in real-time
     const io = getIO();
     if (io && requester) {
-      const payloadData = {
+      io.to(`user:${recipientId}`).emit('friend_request', {
         friendshipId: friendship._id.toString(),
         requester: {
           _id: requester._id.toString(),
@@ -71,16 +71,7 @@ export async function POST(request: NextRequest) {
           username: requester.username,
           avatar: requester.avatar,
         },
-        recipientId,
-        recipient: {
-          _id: recipient._id.toString(),
-          name: recipient.name,
-          username: recipient.username,
-          avatar: recipient.avatar,
-        },
-      };
-      io.to(`user:${recipientId}`).emit('friend_request', payloadData);
-      io.to(`user:${payload.userId}`).emit('friend_request_sent', payloadData);
+      });
     }
 
     // Send FCM push notification if offline
