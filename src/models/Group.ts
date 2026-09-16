@@ -19,6 +19,18 @@ export interface IGroup extends Document {
   pinnedMessage?: mongoose.Types.ObjectId;
   autoApprove: boolean;
   pendingRequests: mongoose.Types.ObjectId[];
+  slowMode: number; // 0, 10, 30, 60, 300, 900, 3600 seconds
+  autoDeleteTimer: number; // 0 = off, 86400 = 24h, 604800 = 7d, 2592000 = 30d
+  permissions: {
+    canSendMessages: boolean;
+    canSendMedia: boolean;
+    canSendPolls: boolean;
+    canEmbedLinks: boolean;
+    canPinMessages: boolean;
+    canChangeInfo: boolean;
+    canAddMembers: boolean;
+  };
+  memberCooldowns?: Map<string, Date>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,6 +96,28 @@ const GroupSchema: Schema<IGroup> = new Schema(
         ref: 'User',
       },
     ],
+    slowMode: {
+      type: Number,
+      default: 0,
+    },
+    autoDeleteTimer: {
+      type: Number,
+      default: 0,
+    },
+    permissions: {
+      canSendMessages: { type: Boolean, default: true },
+      canSendMedia: { type: Boolean, default: true },
+      canSendPolls: { type: Boolean, default: true },
+      canEmbedLinks: { type: Boolean, default: true },
+      canPinMessages: { type: Boolean, default: true },
+      canChangeInfo: { type: Boolean, default: false },
+      canAddMembers: { type: Boolean, default: true },
+    },
+    memberCooldowns: {
+      type: Map,
+      of: Date,
+      default: {},
+    },
   },
   { timestamps: true }
 );

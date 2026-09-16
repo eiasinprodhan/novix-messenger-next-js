@@ -57,6 +57,22 @@ export async function GET(request: NextRequest) {
     const query: any = {
       group: groupId,
       isDeleted: false,
+      $and: [
+        {
+          $or: [
+            { expiresAt: { $exists: false } },
+            { expiresAt: null },
+            { expiresAt: { $gt: new Date() } },
+          ],
+        },
+        {
+          $or: [
+            { scheduledFor: { $exists: false } },
+            { scheduledFor: null },
+            { scheduledFor: { $lte: new Date() } },
+          ],
+        },
+      ],
     };
 
     if (topicId) {
@@ -107,7 +123,11 @@ export async function POST(request: NextRequest) {
       poll,
       topicId,
       expiresAt,
+      isSilent = false,
+      scheduledFor,
     } = await request.json();
+
+    const isFutureScheduled = scheduledFor && new Date(scheduledFor).getTime() > Date.now();
 
     if (!groupId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
       return NextResponse.json({ error: 'groupId and content/attachments/poll required' }, { status: 400 });
@@ -117,6 +137,44 @@ export async function POST(request: NextRequest) {
     const group = await Group.findById(groupId);
     if (!group || !group.members.some((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId)) {
       return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+    }
+
+    const isCreator = (group.createdBy?._id || group.createdBy)?.toString() === payload.userId;
+    const memberEntry = group.members.find((m: any) => (m.user?._id || m.user || m)?.toString() === payload.userId);
+    const isAdmin = isCreator || memberEntry?.role === 'admin';
+
+    // 1. Enforce group permissions for non-admins
+    if (!isAdmin && group.permissions) {
+      if (group.permissions.canSendMessages === false && type === 'text') {
+        return NextResponse.json({ error: 'Sending messages is restricted in this group' }, { status: 403 });
+      }
+      if (group.permissions.canSendMedia === false && (['image', 'video', 'document', 'audio', 'voice'].includes(type) || attachments?.length || imageUrl)) {
+        return NextResponse.json({ error: 'Sending media is restricted in this group' }, { status: 403 });
+      }
+      if (group.permissions.canSendPolls === false && (type === 'poll' || poll)) {
+        return NextResponse.json({ error: 'Sending polls is restricted in this group' }, { status: 403 });
+      }
+      if (group.permissions.canEmbedLinks === false && content && /https?:\/\//i.test(content)) {
+        return NextResponse.json({ error: 'Embedding links is restricted in this group' }, { status: 403 });
+      }
+    }
+
+    // 2. Enforce Slow Mode
+    if (!isAdmin && group.slowMode && group.slowMode > 0) {
+      const lastMsg = await Message.findOne({ group: groupId, sender: payload.userId, isDeleted: false }).sort({ createdAt: -1 });
+      if (lastMsg) {
+        const elapsedSec = (Date.now() - new Date(lastMsg.createdAt).getTime()) / 1000;
+        if (elapsedSec < group.slowMode) {
+          const remaining = Math.ceil(group.slowMode - elapsedSec);
+          return NextResponse.json({ error: `Slow mode is active. Please wait ${remaining}s before sending another message.`, retryAfter: remaining }, { status: 429 });
+        }
+      }
+    }
+
+    // 3. Compute Auto-Delete TTL if configured
+    let computedExpiresAt = expiresAt ? new Date(expiresAt) : undefined;
+    if (!computedExpiresAt && group.autoDeleteTimer && group.autoDeleteTimer > 0) {
+      computedExpiresAt = new Date(Date.now() + group.autoDeleteTimer * 1000);
     }
 
     const message = await Message.create({
@@ -131,7 +189,9 @@ export async function POST(request: NextRequest) {
       attachments: attachments || [],
       poll: poll || undefined,
       topicId: topicId || undefined,
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      expiresAt: computedExpiresAt,
+      isSilent: Boolean(isSilent),
+      scheduledFor: isFutureScheduled ? new Date(scheduledFor) : undefined,
       readBy: [payload.userId], // sender has read their own message
     });
 
@@ -149,79 +209,81 @@ export async function POST(request: NextRequest) {
     await Group.findByIdAndUpdate(groupId, { updatedAt: new Date() });
 
     // Emit real-time to group room AND to each member's personal user room
-    try {
-      const { getIO } = await import('@/lib/socket');
-      const io = getIO();
-      if (io) {
-        const msgObj = populated.toObject();
-        io.to(`group:${groupId}`).emit('new_group_message', {
-          message: msgObj,
-          groupId,
-        });
+    if (!isFutureScheduled) {
+      try {
+        const { getIO } = await import('@/lib/socket');
+        const io = getIO();
+        if (io) {
+          const msgObj = populated.toObject();
+          io.to(`group:${groupId}`).emit('new_group_message', {
+            message: msgObj,
+            groupId,
+          });
 
-        // Also emit to all member user rooms so home screen and notifications update in real-time
-        for (const m of group.members) {
-          const mId = (m.user?._id || m.user || m)?.toString();
-          if (mId && mId !== payload.userId) {
-            io.to(`user:${mId}`).emit('new_group_message', {
-              message: msgObj,
-              groupId,
-            });
+          // Also emit to all member user rooms so home screen and notifications update in real-time
+          for (const m of group.members) {
+            const mId = (m.user?._id || m.user || m)?.toString();
+            if (mId && mId !== payload.userId) {
+              io.to(`user:${mId}`).emit('new_group_message', {
+                message: msgObj,
+                groupId,
+              });
+            }
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
 
-    // Send FCM push to offline group members
-    if (messaging) {
-      try {
-        const senderUser = (populated as any).sender as { _id: any; name?: string; avatar?: string } | null;
-        const senderName = senderUser?.name || 'Someone';
-        const senderAvatar = senderUser?.avatar || '';
-        const notifTitle = group.name as string;
-        const notifBody = type === 'image'
-          ? `${senderName}: 📷 Image`
-          : type === 'audio'
-          ? `${senderName}: 🎵 Voice message`
-          : `${senderName}: ${content || ''}`;
+      // Send FCM push to offline group members
+      if (messaging) {
+        try {
+          const senderUser = (populated as any).sender as { _id: any; name?: string; avatar?: string } | null;
+          const senderName = senderUser?.name || 'Someone';
+          const senderAvatar = senderUser?.avatar || '';
+          const notifTitle = group.name as string;
+          const notifBody = type === 'image'
+            ? `${senderName}: 📷 Image`
+            : type === 'audio'
+            ? `${senderName}: 🎵 Voice message`
+            : `${senderName}: ${content || ''}`;
 
-        const memberIds: string[] = group.members
-          .map((m: any) => (m.user?._id || m.user || m)?.toString())
-          .filter((id: string) => id && id !== payload.userId);
+          const memberIds: string[] = group.members
+            .map((m: any) => (m.user?._id || m.user || m)?.toString())
+            .filter((id: string) => id && id !== payload.userId);
 
-        const offlineMembers = memberIds.filter((id) => !isUserOnline(id));
+          const offlineMembers = memberIds.filter((id) => !isUserOnline(id));
 
-        if (offlineMembers.length > 0) {
-          const memberUsers = await User.find(
-            { _id: { $in: offlineMembers }, fcmToken: { $exists: true, $ne: '' } },
-            'fcmToken'
-          ).lean();
+          if (offlineMembers.length > 0) {
+            const memberUsers = await User.find(
+              { _id: { $in: offlineMembers }, fcmToken: { $exists: true, $ne: '' } },
+              'fcmToken'
+            ).lean();
 
-          await Promise.allSettled(
-            memberUsers.map((member: any) =>
-              messaging!.send({
-                token: member.fcmToken,
-                notification: { title: notifTitle, body: notifBody },
-                data: {
-                  type: 'group_message',
-                  groupId,
-                  senderId: payload.userId,
-                  senderName,
-                  senderAvatar,
-                },
-                android: {
-                  priority: 'high',
-                  notification: {
-                    channelId: 'group_message_channel_id',
-                    icon: '@mipmap/ic_launcher',
+            await Promise.allSettled(
+              memberUsers.map((member: any) =>
+                messaging!.send({
+                  token: member.fcmToken,
+                  notification: { title: notifTitle, body: notifBody },
+                  data: {
+                    type: 'group_message',
+                    groupId,
+                    senderId: payload.userId,
+                    senderName,
+                    senderAvatar,
                   },
-                },
-              })
-            )
-          );
+                  android: {
+                    priority: 'high',
+                    notification: {
+                      channelId: 'group_message_channel_id',
+                      icon: '@mipmap/ic_launcher',
+                    },
+                  },
+                })
+              )
+            );
+          }
+        } catch (fcmErr) {
+          console.error('[FCM] Group message push error:', fcmErr);
         }
-      } catch (fcmErr) {
-        console.error('[FCM] Group message push error:', fcmErr);
       }
     }
 

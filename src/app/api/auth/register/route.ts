@@ -26,37 +26,63 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    let { name, username, email, password, gender, country, birthday } = body;
+    let { name, username, email, password, phone, gender, country, birthday } = body;
 
     // Auto detect country via IP if not provided
     if (!country || typeof country !== 'string' || !country.trim()) {
       country = await getCountryFromRequest(request);
     }
 
-    if (!name || !username || !email || !password || !gender || !birthday) {
-      return NextResponse.json({ error: 'All fields required including gender and birthday' }, { status: 400, headers: corsHeaders() });
+    if (!name || !username || !email || !password) {
+      return NextResponse.json({ error: 'Name, username, email, and password are required' }, { status: 400, headers: corsHeaders() });
     }
 
-    // Validate gender value
+    // Validate gender if provided
     const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
-    if (!validGenders.includes(gender)) {
-      return NextResponse.json({ error: 'Invalid gender value' }, { status: 400, headers: corsHeaders() });
+    if (gender && !validGenders.includes(gender)) {
+      gender = 'prefer_not_to_say';
     }
 
-    // Validate birthday (must be a valid date, user must be at least 13)
-    const birthdayDate = new Date(birthday);
-    if (isNaN(birthdayDate.getTime())) {
-      return NextResponse.json({ error: 'Invalid birthday date' }, { status: 400, headers: corsHeaders() });
-    }
-    const minAgeDate = new Date();
-    minAgeDate.setFullYear(minAgeDate.getFullYear() - 13);
-    if (birthdayDate > minAgeDate) {
-      return NextResponse.json({ error: 'You must be at least 13 years old to register' }, { status: 400, headers: corsHeaders() });
+    // Validate birthday if provided
+    let birthdayDate: Date | null = null;
+    if (birthday) {
+      const parsed = new Date(birthday);
+      if (!isNaN(parsed.getTime())) {
+        const minAgeDate = new Date();
+        minAgeDate.setFullYear(minAgeDate.getFullYear() - 13);
+        if (parsed > minAgeDate) {
+          return NextResponse.json({ error: 'You must be at least 13 years old to register' }, { status: 400, headers: corsHeaders() });
+        }
+        birthdayDate = parsed;
+      }
     }
 
-    const existing = await User.findOne({ $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }] });
+    const orConditions: any[] = [
+      { email: email.toLowerCase() },
+      { username: username.toLowerCase() }
+    ];
+    if (phone && String(phone).trim()) {
+      const cleanDigits = String(phone).replace(/[^\d+]/g, '').trim();
+      const digitsOnly = cleanDigits.replace(/\D/g, '');
+      const regexPattern = digitsOnly.slice(-10);
+      orConditions.push({ phone: String(phone).trim() });
+      if (regexPattern.length >= 6) {
+        orConditions.push({ phone: { $regex: regexPattern, $options: 'i' } });
+      }
+    }
+
+    const existing = await User.findOne({ $or: orConditions });
     if (existing) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 409, headers: corsHeaders() });
+      if (existing.email.toLowerCase() === email.toLowerCase()) {
+        return NextResponse.json({ error: 'This email is already registered' }, { status: 409, headers: corsHeaders() });
+      }
+      if (existing.username.toLowerCase() === username.toLowerCase()) {
+        return NextResponse.json({ error: 'This username is already taken' }, { status: 409, headers: corsHeaders() });
+      }
+      if (phone && existing.phone && existing.phone.trim()) {
+        return NextResponse.json({ error: 'This phone number is already registered' }, { status: 409, headers: corsHeaders() });
+      }
+      return NextResponse.json({ error: 'User already exists with this email, username, or phone number' }, { status: 409, headers: corsHeaders() });
     }
 
     const code = generateOTP();
@@ -67,8 +93,9 @@ export async function POST(request: NextRequest) {
       username: username.toLowerCase().trim(),
       email: email.toLowerCase().trim(),
       password,
-      gender,
-      country: country.trim(),
+      phone: phone ? String(phone).trim() : '',
+      gender: gender || 'prefer_not_to_say',
+      country: country ? country.trim() : '',
       birthday: birthdayDate,
       isVerified: false,
       verificationCode: code,

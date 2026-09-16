@@ -28,6 +28,7 @@ export interface IMessage extends Document {
   topicId?: string;
   scheduledFor?: Date;
   expiresAt?: Date;
+  isSilent?: boolean;
   poll?: {
     question: string;
     options: { id: string; text: string; votes: mongoose.Types.ObjectId[] }[];
@@ -122,6 +123,10 @@ const MessageSchema: Schema<IMessage> = new Schema(
     expiresAt: {
       type: Date,
       index: true,
+    },
+    isSilent: {
+      type: Boolean,
+      default: false,
     },
     poll: {
       question: { type: String },

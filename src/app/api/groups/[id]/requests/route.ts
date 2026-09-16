@@ -37,6 +37,7 @@ export async function POST(
       (uId) => uId.toString() !== userId
     );
 
+    let newlyApproved = false;
     if (approve) {
       const isAlreadyMember = group.members.some(
         (m: any) => m.user.toString() === userId
@@ -47,6 +48,7 @@ export async function POST(
           role: 'member',
           joinedAt: new Date(),
         });
+        newlyApproved = true;
       }
     }
 
@@ -57,6 +59,23 @@ export async function POST(
       .populate('pendingRequests', 'name username avatar isOnline')
       .populate('createdBy', 'name username')
       .populate('pinnedMessage');
+
+    if (approve && newlyApproved) {
+      const { createGroupSystemMessage } = await import('@/lib/groupSystemMessage');
+      const User = (await import('@/models/User')).default;
+      const adminUser = await User.findById(payload.userId).select('name');
+      const adminName = adminUser?.name || 'Someone';
+      const approvedUser = await User.findById(userId).select('name');
+      const approvedName = approvedUser?.name || 'Someone';
+
+      await createGroupSystemMessage({
+        groupId: id,
+        senderId: payload.userId,
+        content: `${adminName} approved ${approvedName}'s request to join`,
+        extraUserIdsToNotify: [userId],
+        updatedGroup: populated,
+      });
+    }
 
     return NextResponse.json({ success: true, group: populated });
   } catch (error: any) {

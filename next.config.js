@@ -46,12 +46,13 @@ const nextConfig = {
       },
     ];
   },
+  allowedDevOrigins: [
+    '*.trycloudflare.com',
+    'cubic-compatible-specifics-seasons.trycloudflare.com',
+  ],
   typescript: {
     // Prevents Next.js OOM during the memory-heavy typecheck phase on 1GB VPS
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 };
 

@@ -19,16 +19,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // If deviceId is provided, verify it is still in the user's devices list
-    const deviceId = request.headers.get('x-device-id');
-    if (deviceId && user.devices && user.devices.length > 0) {
-      const exists = user.devices.some((d: any) => d.deviceId === deviceId);
-      if (!exists) {
-        return NextResponse.json({ error: 'Session expired or device logged out' }, { status: 401 });
-      }
-    }
-
     // Update device activity asynchronously
+    const deviceId = request.headers.get('x-device-id');
     if (deviceId) {
       const { updateDeviceActivity } = await import('@/lib/device');
       await updateDeviceActivity(user._id.toString(), request);

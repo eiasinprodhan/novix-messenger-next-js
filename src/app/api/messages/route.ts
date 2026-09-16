@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
     const targetUserObj = await User.findById(friendId).select('role');
     const isAdminInvolved = currentUserObj?.role === 'admin' || targetUserObj?.role === 'admin';
 
-    if (!isAdminInvolved) {
+    const isSelfSavedMessages = friendId === payload.userId;
+
+    if (!isAdminInvolved && !isSelfSavedMessages) {
       // Verify they are friends
       const friendship = await Friendship.findOne({
         $or: [
@@ -85,6 +87,22 @@ export async function GET(request: NextRequest) {
       ],
       isDeleted: false,
       deletedBy: { $ne: payload.userId },
+      $and: [
+        {
+          $or: [
+            { expiresAt: { $exists: false } },
+            { expiresAt: null },
+            { expiresAt: { $gt: new Date() } },
+          ],
+        },
+        {
+          $or: [
+            { scheduledFor: { $exists: false } },
+            { scheduledFor: null },
+            { scheduledFor: { $lte: new Date() } },
+          ],
+        },
+      ],
     };
 
     if (before) {
@@ -137,18 +155,23 @@ export async function POST(request: NextRequest) {
       poll,
       topicId,
       expiresAt,
+      isSilent = false,
+      scheduledFor,
     } = await request.json();
 
     if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const isSelfSavedMessages = receiverId === payload.userId;
+    const isFutureScheduled = scheduledFor && new Date(scheduledFor).getTime() > Date.now();
+
     // Check if either user is an admin
     const senderUserObj = await User.findById(payload.userId).select('role');
     const receiverUserObj = await User.findById(receiverId).select('role');
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
-    if (!isAdminInvolved) {
+    if (!isAdminInvolved && !isSelfSavedMessages) {
       // Verify friendship
       const friendship = await Friendship.findOne({
         $or: [
@@ -164,43 +187,47 @@ export async function POST(request: NextRequest) {
 
     // Determine initial status based on online state
     let initialStatus: 'sent' | 'delivered' | 'read' = 'sent';
-    try {
-      const { isUserOnline } = await import('@/lib/socket');
-      if (isUserOnline(receiverId)) {
-        initialStatus = 'delivered';
-      } else {
-        // Receiver is offline, send FCM push notification
-        const receiverUser = await User.findById(receiverId);
-        if (receiverUser?.fcmToken && messaging) {
-          const senderUser = await User.findById(payload.userId).select('name avatar');
-          try {
-            await messaging.send({
-              token: receiverUser.fcmToken,
-              notification: {
-                title: senderUser?.name || 'New Message',
-                body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
-              },
-              data: {
-                type: 'message',
-                senderId: payload.userId,
-                senderName: senderUser?.name || '',
-                senderAvatar: senderUser?.avatar || '',
-              },
-              android: {
-                priority: 'high',
+    if (!isFutureScheduled) {
+      try {
+        const { isUserOnline } = await import('@/lib/socket');
+        if (isSelfSavedMessages) {
+          initialStatus = 'read';
+        } else if (isUserOnline(receiverId)) {
+          initialStatus = 'delivered';
+        } else if (!isSilent) {
+          // Receiver is offline, send FCM push notification
+          const receiverUser = await User.findById(receiverId);
+          if (receiverUser?.fcmToken && messaging) {
+            const senderUser = await User.findById(payload.userId).select('name avatar');
+            try {
+              await messaging.send({
+                token: receiverUser.fcmToken,
                 notification: {
-                  channelId: 'message_channel_id',
-                  icon: '@mipmap/ic_launcher',
+                  title: senderUser?.name || 'New Message',
+                  body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
                 },
-              },
-            });
-            console.log(`[FCM] Push notification sent to ${receiverId}`);
-          } catch (fcmError) {
-            console.error('[FCM] Failed to send push notification:', fcmError);
+                data: {
+                  type: 'message',
+                  senderId: payload.userId,
+                  senderName: senderUser?.name || '',
+                  senderAvatar: senderUser?.avatar || '',
+                },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    channelId: 'message_channel_id',
+                    icon: '@mipmap/ic_launcher',
+                  },
+                },
+              });
+              console.log(`[FCM] Push notification sent to ${receiverId}`);
+            } catch (fcmError) {
+              console.error('[FCM] Failed to send push notification:', fcmError);
+            }
           }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
 
     const message = await Message.create({
       sender: payload.userId,
@@ -208,42 +235,46 @@ export async function POST(request: NextRequest) {
       content: content || '',
       type,
       imageUrl: imageUrl || null,
-      status: initialStatus,
+      status: isSelfSavedMessages ? 'read' : initialStatus,
       replyTo: replyTo || null,
       forwardFrom: forwardFrom || undefined,
       attachments: attachments || [],
       poll: poll || undefined,
       topicId: topicId || undefined,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      isSilent: Boolean(isSilent),
+      scheduledFor: isFutureScheduled ? new Date(scheduledFor) : undefined,
     });
 
     const populated = await message.populate('sender', 'name username avatar');
 
-    // Unhide chat for both users on new message
-    await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
-    await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
+    if (!isFutureScheduled) {
+      // Unhide chat for both users on new message
+      await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
+      await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
 
-    await invalidateFriendsCache(payload.userId);
-    await invalidateFriendsCache(receiverId);
-    await invalidateChatCache(payload.userId, receiverId);
+      await invalidateFriendsCache(payload.userId);
+      await invalidateFriendsCache(receiverId);
+      await invalidateChatCache(payload.userId, receiverId);
 
-    // Emit real-time event via socket
-    try {
-      const { getIO } = await import('@/lib/socket');
-      const io = getIO();
-      if (io) {
-        const roomId = [payload.userId, receiverId].sort().join('_');
-        io.to(roomId).emit('new_message', {
-          message: populated.toObject(),
-          from: payload.userId,
-        });
-        io.to(`user:${receiverId}`).emit('new_message', {
-          message: populated.toObject(),
-          from: payload.userId,
-        });
+      // Emit real-time event via socket
+      try {
+        const { getIO } = await import('@/lib/socket');
+        const io = getIO();
+        if (io) {
+          const roomId = [payload.userId, receiverId].sort().join('_');
+          io.to(roomId).emit('new_message', {
+            message: populated.toObject(),
+            from: payload.userId,
+          });
+          io.to(`user:${receiverId}`).emit('new_message', {
+            message: populated.toObject(),
+            from: payload.userId,
+          });
+        }
+      } catch (e) {
+        // Socket not initialized yet - fine for REST fallback
       }
-    } catch (e) {
-      // Socket not initialized yet - fine for REST fallback
     }
 
     return NextResponse.json({

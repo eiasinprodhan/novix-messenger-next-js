@@ -36,7 +36,24 @@ export async function POST(
         (uId) => uId.toString() !== payload.userId
       );
       await group.save();
-      return NextResponse.json({ joined: true, message: 'Joined group successfully' });
+
+      const populated = await Group.findById(id)
+        .populate('members.user', 'name username avatar isOnline');
+
+      const { createGroupSystemMessage } = await import('@/lib/groupSystemMessage');
+      const User = (await import('@/models/User')).default;
+      const joinerUser = await User.findById(payload.userId).select('name');
+      const joinerName = joinerUser?.name || 'Someone';
+
+      await createGroupSystemMessage({
+        groupId: id,
+        senderId: payload.userId,
+        content: `${joinerName} joined the group`,
+        extraUserIdsToNotify: [payload.userId],
+        updatedGroup: populated,
+      });
+
+      return NextResponse.json({ joined: true, message: 'Joined group successfully', group: populated });
     } else {
       const alreadyRequested = group.pendingRequests.some(
         (uId) => uId.toString() === payload.userId

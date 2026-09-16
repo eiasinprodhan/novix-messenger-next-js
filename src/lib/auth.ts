@@ -11,17 +11,17 @@ export interface JwtPayload {
 }
 
 export function generateAccessToken(payload: JwtPayload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '365d' });
 }
 
-// 7-day long-lived admin access token to prevent session expiry during management operations
+// Long-lived admin access token
 export function generateAdminAccessToken(payload: JwtPayload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '365d' });
 }
 
-// 30-day rolling refresh token
+// 365-day rolling refresh token
 export function generateRefreshToken(payload: JwtPayload) {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d' });
+  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '365d' });
 }
 
 export function verifyAccessToken(token: string): JwtPayload | null {

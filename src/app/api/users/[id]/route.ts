@@ -56,11 +56,12 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, username, bio, avatar, gender, country, birthday } = body;
+    const { name, username, bio, avatar, gender, country, birthday, phone } = body;
 
     const updateData: any = {};
     if (name) updateData.name = name.trim();
     if (username) updateData.username = username.toLowerCase().trim();
+    if (phone !== undefined) updateData.phone = String(phone).trim();
     if (bio !== undefined) updateData.bio = bio.trim();
     if (avatar !== undefined) updateData.avatar = avatar; // support avatar URL
     if (gender !== undefined) {

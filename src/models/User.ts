@@ -8,6 +8,7 @@ export interface IUser extends Document {
   password?: string;
   bio?: string;
   avatar?: string;
+  phone?: string;
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   country?: string;
   birthday?: Date;
@@ -32,6 +33,19 @@ export interface IUser extends Document {
   readReceiptsEnabled: boolean;
   typingIndicatorsEnabled: boolean;
   hiddenChats: mongoose.Types.ObjectId[];
+  drafts?: Map<string, string>;
+  archivedChats?: string[];
+  mutedChats?: { chatId: string; mutedUntil?: Date }[];
+  unreadChats?: string[];
+  folders?: {
+    id: string;
+    name: string;
+    iconName?: string;
+    includedTypes?: string[];
+    excludedTypes?: string[];
+    includedChatIds?: string[];
+    excludedChatIds?: string[];
+  }[];
   devices: {
     deviceId: string;
     deviceName: string;
@@ -64,6 +78,7 @@ const UserSchema: Schema<IUser> = new Schema(
       minlength: 6,
       select: false,
     },
+    phone: { type: String, trim: true, default: '' },
     bio: { type: String, default: '', maxlength: 150 },
     avatar: { type: String, default: '' },
     gender: { type: String, enum: ['male', 'female', 'other', 'prefer_not_to_say'], default: null },
@@ -90,6 +105,26 @@ const UserSchema: Schema<IUser> = new Schema(
     readReceiptsEnabled: { type: Boolean, default: true },
     typingIndicatorsEnabled: { type: Boolean, default: true },
     hiddenChats: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    drafts: { type: Map, of: String, default: {} },
+    archivedChats: [{ type: String }],
+    mutedChats: [
+      {
+        chatId: { type: String, required: true },
+        mutedUntil: { type: Date },
+      },
+    ],
+    unreadChats: [{ type: String }],
+    folders: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        iconName: { type: String, default: 'folder' },
+        includedTypes: [{ type: String }],
+        excludedTypes: [{ type: String }],
+        includedChatIds: [{ type: String }],
+        excludedChatIds: [{ type: String }],
+      },
+    ],
     devices: [
       {
         deviceId: { type: String, required: true },

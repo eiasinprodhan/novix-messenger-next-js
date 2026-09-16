@@ -85,6 +85,32 @@ export async function POST(request: NextRequest) {
       .populate('members.user', 'name username avatar isOnline')
       .populate('createdBy', 'name username');
 
+    // Create system message for group creation
+    const { createGroupSystemMessage } = await import('@/lib/groupSystemMessage');
+    const creatorUser = await User.findById(payload.userId).select('name');
+    const creatorName = creatorUser?.name || 'Someone';
+
+    await createGroupSystemMessage({
+      groupId: group._id.toString(),
+      senderId: payload.userId,
+      content: `${creatorName} created the group "${name.trim()}"`,
+      updatedGroup: populated,
+    });
+
+    const validMemberIds = memberIds.filter((id: string) => id !== payload.userId);
+    if (validMemberIds.length > 0) {
+      const addedUsers = await User.find({ _id: { $in: validMemberIds } }).select('name');
+      const addedNames = addedUsers.map((u) => u.name).filter(Boolean);
+      if (addedNames.length > 0) {
+        await createGroupSystemMessage({
+          groupId: group._id.toString(),
+          senderId: payload.userId,
+          content: `${creatorName} added ${addedNames.join(', ')}`,
+          updatedGroup: populated,
+        });
+      }
+    }
+
     return NextResponse.json({ success: true, group: populated }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating group:', error);
