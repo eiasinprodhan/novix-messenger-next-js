@@ -41,58 +41,134 @@ function getTransporter() {
   });
 }
 
+function getBaseUrl(): string {
+  // Prefer the public-facing URL from env, strip /api suffix
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  if (apiUrl) return apiUrl.replace(/\/api\/?$/, '');
+  return 'http://130.210.13.242:3000';
+}
+
 function otpEmailHtml(
   title: string,
   subtitle: string,
   code: string,
   note: string
 ) {
-  return `
-<!DOCTYPE html>
-<html>
+  const baseUrl = getBaseUrl();
+  const logoUrl = `${baseUrl}/novix_vpn.png`;
+  const year = new Date().getFullYear();
+
+  // Split the 6-digit code into individual character cells for a stylish box display
+  const codeDigits = code.split('');
+  const digitCells = codeDigits
+    .map(
+      (d) =>
+        `<td style="width:48px;height:56px;background:#0E1621;border:2px solid #3390EC;border-radius:10px;text-align:center;vertical-align:middle;font-size:28px;font-weight:800;color:#5EBBF5;font-family:'Courier New',Courier,monospace;letter-spacing:0;">${d}</td>`
+    )
+    .join('<td style="width:6px;"></td>');
+
+  return `<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#0E1621;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0E1621;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:#0E1621;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <!--[if mso]><table role="presentation" align="center" width="520"><tr><td><![endif]-->
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0E1621;padding:40px 16px;">
     <tr>
       <td align="center">
-        <table width="480" cellpadding="0" cellspacing="0" style="background:#17212B;border-radius:16px;overflow:hidden;max-width:480px;width:100%;">
-          <!-- Header -->
+
+        <!-- Card -->
+        <table role="presentation" cellpadding="0" cellspacing="0" width="520" style="max-width:520px;width:100%;background-color:#17212B;border-radius:20px;overflow:hidden;border:1px solid #1E2D3D;">
+
+          <!-- ══ HEADER ══ -->
           <tr>
-            <td style="background:linear-gradient(135deg,#5EBBF5,#3A9AD9);padding:32px 40px;text-align:center;">
-              <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                <span style="font-size:32px;font-weight:800;color:#fff;line-height:64px;display:block;">N</span>
+            <td style="background:linear-gradient(135deg,#2B5278 0%,#1A3A5C 100%);padding:32px 40px 28px;text-align:center;">
+              <!-- Logo image with text fallback -->
+              <img src="${logoUrl}"
+                   alt="Novix Messenger"
+                   width="72"
+                   height="72"
+                   style="display:block;margin:0 auto 14px;width:72px;height:72px;border-radius:18px;object-fit:contain;background:rgba(255,255,255,0.08);"
+                   onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='inline-block';"
+              />
+              <div id="logo-fallback" style="display:none;width:72px;height:72px;background:rgba(255,255,255,0.15);border-radius:18px;margin:0 auto 14px;text-align:center;line-height:72px;">
+                <span style="font-size:36px;font-weight:900;color:#ffffff;">N</span>
               </div>
-              <h1 style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">Novix Messenger</h1>
+              <h1 style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.2px;line-height:1.3;">Novix Messenger</h1>
+              <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.55);letter-spacing:0.5px;text-transform:uppercase;">Security Notification</p>
             </td>
           </tr>
-          <!-- Body -->
+
+          <!-- ══ DIVIDER ══ -->
           <tr>
-            <td style="padding:36px 40px;">
-              <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#fff;">${title}</h2>
-              <p style="margin:0 0 28px;font-size:14px;color:#7D8E9A;line-height:1.6;">${subtitle}</p>
+            <td style="height:0;border-bottom:1px solid #1E2D3D;"></td>
+          </tr>
+
+          <!-- ══ BODY ══ -->
+          <tr>
+            <td style="padding:36px 40px 32px;">
+
+              <!-- Title -->
+              <h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">${title}</h2>
+              <p style="margin:0 0 30px;font-size:14px;color:#8E9CAE;line-height:1.7;">${subtitle}</p>
+
               <!-- OTP Box -->
-              <div style="background:#0E1621;border-radius:12px;padding:24px;text-align:center;margin-bottom:28px;border:1px solid #1C2A38;">
-                <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#5D6D7C;letter-spacing:1px;text-transform:uppercase;">Your verification code</p>
-                <p style="margin:0;font-size:40px;font-weight:800;letter-spacing:12px;color:#5EBBF5;font-family:'Courier New',monospace;">${code}</p>
-              </div>
-              <p style="margin:0;font-size:13px;color:#5D6D7C;line-height:1.6;">${note}</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0D1923;border-radius:14px;border:1px solid #1E2D3D;margin-bottom:28px;">
+                <tr>
+                  <td style="padding:20px 24px 10px;text-align:center;">
+                    <p style="margin:0 0 16px;font-size:11px;font-weight:700;color:#4A6580;letter-spacing:2px;text-transform:uppercase;">Your Verification Code</p>
+                    <!-- Digit boxes -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                      <tr>${digitCells}</tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px 20px;text-align:center;">
+                    <p style="margin:0;font-size:12px;color:#4A6580;">
+                      ⏱&nbsp; Expires in <strong style="color:#8E9CAE;">15 minutes</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Note -->
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0F1E2A;border-left:3px solid #3390EC;border-radius:0 8px 8px 0;margin-bottom:4px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#7D8E9A;line-height:1.65;">${note}</p>
+                  </td>
+                </tr>
+              </table>
+
             </td>
           </tr>
-          <!-- Footer -->
+
+          <!-- ══ FOOTER ══ -->
           <tr>
-            <td style="padding:20px 40px;border-top:1px solid #1C2A38;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#5D6D7C;">If you didn't request this, you can safely ignore this email.</p>
-              <p style="margin:8px 0 0;font-size:11px;color:#3A4A5A;">© ${new Date().getFullYear()} Novix Messenger</p>
+            <td style="background-color:#111B25;padding:22px 40px;border-top:1px solid #1E2D3D;text-align:center;">
+              <p style="margin:0 0 6px;font-size:12px;color:#4A6580;line-height:1.5;">
+                If you didn't request this, you can safely ignore this email.<br/>
+                Your account remains secure.
+              </p>
+              <p style="margin:10px 0 0;font-size:11px;color:#2E3F4F;">
+                © ${year} Novix Messenger &nbsp;·&nbsp;
+                <a href="${baseUrl}" style="color:#3390EC;text-decoration:none;">novixvpn.com</a>
+              </p>
             </td>
           </tr>
+
         </table>
+        <!-- /Card -->
+
       </td>
     </tr>
   </table>
+  <!--[if mso]></td></tr></table><![endif]-->
 </body>
 </html>`;
 }
