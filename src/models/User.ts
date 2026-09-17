@@ -55,6 +55,53 @@ export interface IUser extends Document {
     ipAddress: string;
     lastActiveAt: Date;
   }[];
+  // Telegram Features
+  isPremium?: boolean;
+  premiumExpiresAt?: Date;
+  premiumPlan?: 'monthly' | 'annual';
+  starsBalance?: number;
+  starTransactions?: {
+    id: string;
+    type: 'purchase' | 'gift_sent' | 'gift_received' | 'subscription' | 'reward';
+    amount: number;
+    title: string;
+    description?: string;
+    createdAt: Date;
+  }[];
+  businessSettings?: {
+    isEnabled: boolean;
+    location?: { address: string; showOnProfile?: boolean };
+    openingHours?: {
+      enabled: boolean;
+      schedule: { day: string; open: string; close: string; isClosed: boolean; is24Hours: boolean }[];
+    };
+    quickReplies?: { id: string; shortcut: string; message: string }[];
+    greetingMessage?: { enabled: boolean; text: string; recipients: string };
+    awayMessage?: { enabled: boolean; text: string; schedule: string };
+    businessIntro?: { title: string; message: string };
+    chatbot?: { enabled: boolean; botUsername?: string };
+  };
+  giftsReceived?: {
+    id: string;
+    giftId: string;
+    giftName: string;
+    giftIcon: string;
+    starPrice: number;
+    senderId: string;
+    senderName: string;
+    senderAvatar?: string;
+    isAnonymous: boolean;
+    message?: string;
+    sentAt: Date;
+    isPinned: boolean;
+    convertedToStars: boolean;
+  }[];
+  identityVerified?: boolean;
+  verificationSelfieUrl?: string;
+  twoFactorEnabled?: boolean;
+  passkeys?: { id: string; name: string; createdAt: Date }[];
+  savedAds?: { id: string; title: string; advertiser: string; imageUrl: string; url: string; savedAt: Date }[];
+  hiddenAdvertisers?: string[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -136,6 +183,105 @@ const UserSchema: Schema<IUser> = new Schema(
         lastActiveAt: { type: Date, default: Date.now },
       }
     ],
+    // Telegram Features
+    isPremium: { type: Boolean, default: false },
+    premiumExpiresAt: { type: Date },
+    premiumPlan: { type: String, enum: ['monthly', 'annual'], default: null },
+    starsBalance: { type: Number, default: 250 }, // 250 starter stars for fun!
+    starTransactions: [
+      {
+        id: { type: String, required: true },
+        type: { type: String, enum: ['purchase', 'gift_sent', 'gift_received', 'subscription', 'reward'], required: true },
+        amount: { type: Number, required: true },
+        title: { type: String, required: true },
+        description: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now },
+      }
+    ],
+    businessSettings: {
+      isEnabled: { type: Boolean, default: false },
+      location: {
+        address: { type: String, default: '' },
+        showOnProfile: { type: Boolean, default: true },
+      },
+      openingHours: {
+        enabled: { type: Boolean, default: false },
+        schedule: [
+          {
+            day: { type: String },
+            open: { type: String, default: '09:00' },
+            close: { type: String, default: '18:00' },
+            isClosed: { type: Boolean, default: false },
+            is24Hours: { type: Boolean, default: false },
+          }
+        ],
+      },
+      quickReplies: [
+        {
+          id: { type: String },
+          shortcut: { type: String },
+          message: { type: String },
+        }
+      ],
+      greetingMessage: {
+        enabled: { type: Boolean, default: false },
+        text: { type: String, default: 'Hello! Thanks for reaching out. How can I help you today?' },
+        recipients: { type: String, default: 'all' },
+      },
+      awayMessage: {
+        enabled: { type: Boolean, default: false },
+        text: { type: String, default: 'I am currently away. I will get back to you as soon as possible!' },
+        schedule: { type: String, default: 'outside_hours' },
+      },
+      businessIntro: {
+        title: { type: String, default: '' },
+        message: { type: String, default: '' },
+      },
+      chatbot: {
+        enabled: { type: Boolean, default: false },
+        botUsername: { type: String, default: '' },
+      },
+    },
+    giftsReceived: [
+      {
+        id: { type: String, required: true },
+        giftId: { type: String, required: true },
+        giftName: { type: String, required: true },
+        giftIcon: { type: String, required: true },
+        starPrice: { type: Number, required: true },
+        senderId: { type: String, required: true },
+        senderName: { type: String, required: true },
+        senderAvatar: { type: String, default: '' },
+        isAnonymous: { type: Boolean, default: false },
+        message: { type: String, default: '' },
+        sentAt: { type: Date, default: Date.now },
+        isPinned: { type: Boolean, default: true },
+        convertedToStars: { type: Boolean, default: false },
+      }
+    ],
+    // Security & Identity Confirmation
+    identityVerified: { type: Boolean, default: false },
+    verificationSelfieUrl: { type: String, default: '' },
+    twoFactorEnabled: { type: Boolean, default: false },
+    passkeys: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, default: 'Passkey' },
+        createdAt: { type: Date, default: Date.now },
+      }
+    ],
+    // Ad Preferences
+    savedAds: [
+      {
+        id: { type: String, required: true },
+        title: { type: String, required: true },
+        advertiser: { type: String, required: true },
+        imageUrl: { type: String, default: '' },
+        url: { type: String, default: '' },
+        savedAt: { type: Date, default: Date.now },
+      }
+    ],
+    hiddenAdvertisers: [{ type: String }],
   },
   { timestamps: true }
 );
