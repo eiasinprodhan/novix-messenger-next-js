@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
       id: 'sub_' + Date.now(),
       type: 'reward',
       amount: bonusStars,
-      title: `Telegram Premium (${plan === 'annual' ? 'Annual' : 'Monthly'}) Bonus`,
-      description: `Received ${bonusStars} bonus Stars with your Telegram Premium subscription!`,
+      title: `Novix Premium (${plan === 'annual' ? 'Annual' : 'Monthly'}) Bonus`,
+      description: `Received ${bonusStars} bonus Stars with your Novix Premium subscription!`,
       createdAt: new Date(),
     });
 
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Subscribed to Telegram Premium successfully!',
+      message: 'Subscribed to Novix Premium successfully!',
       isPremium: user.isPremium,
       premiumExpiresAt: user.premiumExpiresAt,
       premiumPlan: user.premiumPlan,

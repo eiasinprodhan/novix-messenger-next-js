@@ -55,7 +55,7 @@ export interface IUser extends Document {
     ipAddress: string;
     lastActiveAt: Date;
   }[];
-  // Telegram Features
+  // Novix Features
   isPremium?: boolean;
   premiumExpiresAt?: Date;
   premiumPlan?: 'monthly' | 'annual';
@@ -102,6 +102,12 @@ export interface IUser extends Document {
   passkeys?: { id: string; name: string; createdAt: Date }[];
   savedAds?: { id: string; title: string; advertiser: string; imageUrl: string; url: string; savedAt: Date }[];
   hiddenAdvertisers?: string[];
+  adPreferences?: {
+    partnerActivity?: boolean;
+    audienceBased?: boolean;
+    profileCategories?: boolean;
+    dataSharing?: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -183,7 +189,7 @@ const UserSchema: Schema<IUser> = new Schema(
         lastActiveAt: { type: Date, default: Date.now },
       }
     ],
-    // Telegram Features
+    // Novix Features
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date },
     premiumPlan: { type: String, enum: ['monthly', 'annual'], default: null },
@@ -282,6 +288,12 @@ const UserSchema: Schema<IUser> = new Schema(
       }
     ],
     hiddenAdvertisers: [{ type: String }],
+    adPreferences: {
+      partnerActivity: { type: Boolean, default: false },
+      audienceBased: { type: Boolean, default: false },
+      profileCategories: { type: Boolean, default: false },
+      dataSharing: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );

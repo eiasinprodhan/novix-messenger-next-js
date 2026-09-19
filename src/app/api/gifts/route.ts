@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     try {
       await Message.create({
         sender: sender._id,
-        recipient: recipient._id,
+        receiver: recipient._id,
         content: `${gift.icon} Sent you a gift: ${gift.name}!${giftComment ? ` "${giftComment}"` : ''}`,
         messageType: 'text',
       });

@@ -24,7 +24,9 @@ import {
   X,
   Download,
   Eye,
-  Edit3
+  Edit3,
+  Star,
+  Crown
 } from 'lucide-react';
 
 interface User {
@@ -36,6 +38,10 @@ interface User {
   role: 'user' | 'admin';
   isOnline: boolean;
   isVerified: boolean;
+  isPremium?: boolean;
+  starsBalance?: number;
+  telegramStars?: number;
+  premiumPlan?: string;
   lastSeen: string;
   bio?: string;
   createdAt: string;
@@ -464,12 +470,23 @@ export default function AdminUsers() {
                         <div className="min-w-0">
                           <button
                             onClick={() => setInspectUser(u)}
-                            className="font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 truncate text-left block"
+                            className="font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 truncate text-left flex items-center gap-1.5"
                           >
-                            {u.name}
+                            <span>{u.name}</span>
+                            {u.isPremium && (
+                              <span title="Novix Premium PRO">
+                                <Crown size={13} className="text-purple-500 fill-purple-500 shrink-0" />
+                              </span>
+                            )}
                           </button>
-                          <div className="text-xs text-slate-400 truncate">
-                            @{u.username || 'unknown'}
+                          <div className="text-xs text-slate-400 truncate flex items-center gap-2">
+                            <span>@{u.username || 'unknown'}</span>
+                            {((u.starsBalance ?? u.telegramStars ?? 0) > 0) && (
+                              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber-500">
+                                <Star size={11} className="fill-amber-500" />
+                                <span>{(u.starsBalance ?? u.telegramStars ?? 0).toLocaleString()}</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -814,6 +831,20 @@ export default function AdminUsers() {
                 <span className="text-slate-400 font-medium block mb-1">Registered On</span>
                 <span className="font-medium text-slate-600 dark:text-slate-300">
                   {inspectUser.createdAt ? new Date(inspectUser.createdAt).toLocaleDateString() : 'Unknown'}
+                </span>
+              </div>
+              <div className="p-3 bg-amber-50/50 dark:bg-amber-950/40 rounded-xl border border-amber-200/60 dark:border-amber-900/60">
+                <span className="text-amber-700/80 dark:text-amber-300 font-medium block mb-1">Novix Stars</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Star size={14} className="fill-amber-500" />
+                  <span>{((inspectUser.starsBalance ?? inspectUser.telegramStars ?? 0)).toLocaleString()} Stars</span>
+                </span>
+              </div>
+              <div className="p-3 bg-purple-50/50 dark:bg-purple-950/40 rounded-xl border border-purple-200/60 dark:border-purple-900/60">
+                <span className="text-purple-700/80 dark:text-purple-300 font-medium block mb-1">Novix Premium</span>
+                <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                  <Crown size={14} className={inspectUser.isPremium ? "fill-purple-500" : ""} />
+                  <span>{inspectUser.isPremium ? `PRO (${inspectUser.premiumPlan || 'Active'})` : 'Free Tier'}</span>
                 </span>
               </div>
             </div>

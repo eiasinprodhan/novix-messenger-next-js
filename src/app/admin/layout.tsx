@@ -87,6 +87,20 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Monetization & Ads',
+    items: [
+      {
+        label: 'Ads & Stars Hub',
+        shortLabel: 'Monetization',
+        href: '/admin/ads',
+        icon: Sparkles,
+        badge: 'Live',
+        badgeColor: 'emerald',
+        description: 'Ad campaigns, Novix Stars & Premium status',
+      },
+    ],
+  },
+  {
     title: 'System Operations',
     items: [
       {

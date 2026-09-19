@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       id: 'tx_' + Date.now(),
       type: 'purchase' as const,
       amount: pkg.stars,
-      title: `Purchased ${pkg.stars} Telegram Stars`,
+      title: `Purchased ${pkg.stars} Novix Stars`,
       description: `Payment of $${pkg.priceUsd} confirmed`,
       createdAt: new Date(),
     };
