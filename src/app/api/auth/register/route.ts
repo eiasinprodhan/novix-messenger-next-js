@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate birthday if provided
-    let birthdayDate: Date | null = null;
+    let birthdayDate: Date | undefined = undefined;
     if (birthday) {
       const parsed = new Date(birthday);
       if (!isNaN(parsed.getTime())) {

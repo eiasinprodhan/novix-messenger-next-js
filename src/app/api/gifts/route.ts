@@ -132,7 +132,8 @@ export async function POST(request: NextRequest) {
         sender: sender._id,
         receiver: recipient._id,
         content: `${gift.icon} Sent you a gift: ${gift.name}!${giftComment ? ` "${giftComment}"` : ''}`,
-        messageType: 'text',
+        type: 'text',
+        status: 'sent',
       });
     } catch (_) {
       // Non-blocking if Message model structure differs
