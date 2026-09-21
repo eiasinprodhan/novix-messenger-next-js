@@ -1,6 +1,6 @@
 # Novix Messenger - Next.js Backend + Admin Dashboard
 
-**Full Backend + Admin Dashboard** for Novix Messenger (WhatsApp-like UI + Telegram features).
+**Full Backend + Admin Dashboard** for Novix Messenger (WhatsApp-like UI + Novix features).
 
 This is the **standalone Next.js** part of the project.
 
@@ -109,7 +109,7 @@ All features from Parts 1–8 are implemented:
 - Image messages
 - Advanced actions (reactions, reply, pin, delete)
 - Profile + avatar
-- Telegram-style privacy & notification settings
+- Novix-style privacy & notification settings
 
 ---
 

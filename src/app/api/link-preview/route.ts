@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(validUrl.toString(), {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NovixBot/2.0 (like TelegramBot)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NovixBot/2.0 (like NovixBot)',
         Accept: 'text/html,application/xhtml+xml',
       },
       signal: controller.signal,

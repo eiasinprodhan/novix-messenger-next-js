@@ -40,7 +40,7 @@ interface User {
   isVerified: boolean;
   isPremium?: boolean;
   starsBalance?: number;
-  telegramStars?: number;
+  novixStars?: number;
   premiumPlan?: string;
   lastSeen: string;
   bio?: string;
@@ -481,10 +481,10 @@ export default function AdminUsers() {
                           </button>
                           <div className="text-xs text-slate-400 truncate flex items-center gap-2">
                             <span>@{u.username || 'unknown'}</span>
-                            {((u.starsBalance ?? u.telegramStars ?? 0) > 0) && (
+                            {((u.starsBalance ?? u.novixStars ?? 0) > 0) && (
                               <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber-500">
                                 <Star size={11} className="fill-amber-500" />
-                                <span>{(u.starsBalance ?? u.telegramStars ?? 0).toLocaleString()}</span>
+                                <span>{(u.starsBalance ?? u.novixStars ?? 0).toLocaleString()}</span>
                               </span>
                             )}
                           </div>
@@ -837,7 +837,7 @@ export default function AdminUsers() {
                 <span className="text-amber-700/80 dark:text-amber-300 font-medium block mb-1">Novix Stars</span>
                 <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                   <Star size={14} className="fill-amber-500" />
-                  <span>{((inspectUser.starsBalance ?? inspectUser.telegramStars ?? 0)).toLocaleString()} Stars</span>
+                  <span>{((inspectUser.starsBalance ?? inspectUser.novixStars ?? 0)).toLocaleString()} Stars</span>
                 </span>
               </div>
               <div className="p-3 bg-purple-50/50 dark:bg-purple-950/40 rounded-xl border border-purple-200/60 dark:border-purple-900/60">
