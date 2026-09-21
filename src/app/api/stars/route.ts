@@ -50,7 +50,67 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { packageId, stars: requestedStars } = body;
+    const { action, recipientId, stars: requestedStars, packageId, message } = body;
+
+    // Direct star transfer / gift to a friend
+    if (action === 'transfer' || recipientId) {
+      const amount = Number(requestedStars);
+      if (!amount || amount <= 0) {
+        return NextResponse.json({ error: 'Please specify a valid star amount' }, { status: 400 });
+      }
+
+      const sender = await User.findById(payload.userId);
+      if (!sender) {
+        return NextResponse.json({ error: 'Sender not found' }, { status: 404 });
+      }
+
+      const senderBalance = typeof sender.starsBalance === 'number' ? sender.starsBalance : 250;
+      if (senderBalance < amount) {
+        return NextResponse.json({ error: 'Insufficient star balance' }, { status: 400 });
+      }
+
+      const recipient = await User.findById(recipientId);
+      if (!recipient) {
+        return NextResponse.json({ error: 'Recipient user not found' }, { status: 404 });
+      }
+
+      // Deduct from sender
+      sender.starsBalance = senderBalance - amount;
+      if (!sender.starTransactions) sender.starTransactions = [];
+
+      const senderTx = {
+        id: 'tx_' + Date.now() + '_sent',
+        type: 'gift_sent' as const,
+        amount: -amount,
+        title: `Sent ${amount} Stars to ${recipient.name}`,
+        description: message?.trim() || `Direct Star Gift`,
+        createdAt: new Date(),
+      };
+      sender.starTransactions.unshift(senderTx);
+      await sender.save();
+
+      // Credit recipient
+      recipient.starsBalance = (typeof recipient.starsBalance === 'number' ? recipient.starsBalance : 250) + amount;
+      if (!recipient.starTransactions) recipient.starTransactions = [];
+
+      const recipientTx = {
+        id: 'tx_' + Date.now() + '_rcv',
+        type: 'gift_received' as const,
+        amount: amount,
+        title: `Received ${amount} Stars from ${sender.name}`,
+        description: message?.trim() || `Direct Star Gift`,
+        createdAt: new Date(),
+      };
+      recipient.starTransactions.unshift(recipientTx);
+      await recipient.save();
+
+      return NextResponse.json({
+        success: true,
+        balance: sender.starsBalance,
+        transaction: senderTx,
+        message: `Successfully sent ${amount} Stars to ${recipient.name}!`,
+      });
+    }
 
     const pkg = STAR_PACKAGES.find((p) => p.id === packageId) || {
       stars: requestedStars || 50,
@@ -62,7 +122,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    user.starsBalance = (user.starsBalance || 0) + pkg.stars;
+    const currentBalance = typeof user.starsBalance === 'number' ? user.starsBalance : 250;
+    user.starsBalance = currentBalance + pkg.stars;
     if (!user.starTransactions) user.starTransactions = [];
 
     const newTx = {
@@ -84,6 +145,6 @@ export async function POST(request: NextRequest) {
       message: `Successfully purchased ${pkg.stars} Stars!`,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to buy stars' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to process stars request' }, { status: 500 });
   }
 }

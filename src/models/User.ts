@@ -58,7 +58,7 @@ export interface IUser extends Document {
   // Novix Features
   isPremium?: boolean;
   premiumExpiresAt?: Date;
-  premiumPlan?: 'monthly' | 'annual';
+  premiumPlan?: 'monthly' | 'annual' | 'lifetime';
   starsBalance?: number;
   starTransactions?: {
     id: string;
@@ -80,6 +80,7 @@ export interface IUser extends Document {
     awayMessage?: { enabled: boolean; text: string; schedule: string };
     businessIntro?: { title: string; message: string };
     chatbot?: { enabled: boolean; botUsername?: string };
+    chatLinks?: { id: string; link: string; message: string; clicks?: number }[];
   };
   giftsReceived?: {
     id: string;
@@ -247,6 +248,14 @@ const UserSchema: Schema<IUser> = new Schema(
         enabled: { type: Boolean, default: false },
         botUsername: { type: String, default: '' },
       },
+      chatLinks: [
+        {
+          id: { type: String },
+          link: { type: String },
+          message: { type: String },
+          clicks: { type: Number, default: 0 },
+        }
+      ],
     },
     giftsReceived: [
       {

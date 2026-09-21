@@ -80,12 +80,20 @@ const PREMIUM_FEATURES = [
 
 const PREMIUM_PLANS = [
   {
+    id: 'lifetime',
+    title: 'Lifetime',
+    priceUsd: 59.99,
+    monthlyEquivalent: 0,
+    discountPercent: 60,
+    isBestValue: true,
+  },
+  {
     id: 'annual',
     title: '12 Months',
     priceUsd: 28.99,
     monthlyEquivalent: 2.41,
     discountPercent: 40,
-    isBestValue: true,
+    isBestValue: false,
   },
   {
     id: 'monthly',
@@ -137,7 +145,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const plan = body.plan === 'monthly' ? 'monthly' : 'annual';
+    const requestedPlan = body.plan?.toLowerCase();
+    const plan = (requestedPlan === 'lifetime') ? 'lifetime' : (requestedPlan === 'monthly' ? 'monthly' : 'annual');
 
     const user = await User.findById(payload.userId);
     if (!user) {
@@ -146,7 +155,9 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const expiresAt = new Date(now);
-    if (plan === 'annual') {
+    if (plan === 'lifetime') {
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100);
+    } else if (plan === 'annual') {
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
     } else {
       expiresAt.setMonth(expiresAt.getMonth() + 1);
@@ -157,15 +168,15 @@ export async function POST(request: NextRequest) {
     user.premiumPlan = plan;
 
     // Add bonus stars on subscription!
-    const bonusStars = plan === 'annual' ? 250 : 50;
+    const bonusStars = plan === 'lifetime' ? 1000 : (plan === 'annual' ? 250 : 50);
     user.starsBalance = (user.starsBalance || 0) + bonusStars;
     if (!user.starTransactions) user.starTransactions = [];
     user.starTransactions.unshift({
       id: 'sub_' + Date.now(),
       type: 'reward',
       amount: bonusStars,
-      title: `Novix Premium (${plan === 'annual' ? 'Annual' : 'Monthly'}) Bonus`,
-      description: `Received ${bonusStars} bonus Stars with your Novix Premium subscription!`,
+      title: `Novix Premium (${plan.toUpperCase()}) Bonus`,
+      description: `Received ${bonusStars} bonus Stars with your Novix Premium ${plan} plan!`,
       createdAt: new Date(),
     });
 

@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
 
     // Check if either user is an admin
     const senderUserObj = await User.findById(payload.userId).select('role');
-    const receiverUserObj = await User.findById(receiverId).select('role');
+    const receiverUserObj = await User.findById(receiverId).select('role businessSettings fcmToken name avatar');
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
@@ -274,6 +274,84 @@ export async function POST(request: NextRequest) {
         }
       } catch (e) {
         // Socket not initialized yet - fine for REST fallback
+      }
+
+      // ── Automated Business Auto-Reply (Greeting & Away Messages) ──
+      if (receiverUserObj?.businessSettings?.isEnabled && !isSelfSavedMessages) {
+        try {
+          const bs = receiverUserObj.businessSettings;
+          let autoReplyText: string | null = null;
+
+          // 1. Check Greeting Message
+          if (bs.greetingMessage?.enabled && bs.greetingMessage?.text?.trim()) {
+            const previousMsgCount = await Message.countDocuments({
+              sender: payload.userId,
+              receiver: receiverId,
+              _id: { $ne: message._id },
+            });
+            if (previousMsgCount === 0) {
+              autoReplyText = bs.greetingMessage.text.trim();
+            }
+          }
+
+          // 2. Check Away Message (if no greeting was triggered or if outside business hours)
+          if (!autoReplyText && bs.awayMessage?.enabled && bs.awayMessage?.text?.trim()) {
+            let isAway = false;
+            if (bs.awayMessage.schedule === 'always') {
+              isAway = true;
+            } else if (bs.openingHours?.enabled && Array.isArray(bs.openingHours.schedule)) {
+              const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+              const now = new Date();
+              const currentDayName = daysOfWeek[now.getDay()];
+              const todaySchedule = bs.openingHours.schedule.find((s: any) => s.day === currentDayName);
+
+              if (todaySchedule) {
+                if (todaySchedule.isClosed) {
+                  isAway = true;
+                } else if (!todaySchedule.is24Hours) {
+                  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                  const [openH, openM] = (todaySchedule.open || '09:00').split(':').map(Number);
+                  const [closeH, closeM] = (todaySchedule.close || '18:00').split(':').map(Number);
+                  const openMinutes = (openH || 0) * 60 + (openM || 0);
+                  const closeMinutes = (closeH || 0) * 60 + (closeM || 0);
+                  if (nowMinutes < openMinutes || nowMinutes > closeMinutes) {
+                    isAway = true;
+                  }
+                }
+              }
+            }
+            if (isAway) {
+              autoReplyText = bs.awayMessage.text.trim();
+            }
+          }
+
+          // If auto reply text is determined, create and emit automated message
+          if (autoReplyText) {
+            const autoMsg = await Message.create({
+              sender: receiverId,
+              receiver: payload.userId,
+              content: autoReplyText,
+              type: 'text',
+              status: 'sent',
+            });
+            const populatedAuto = await autoMsg.populate('sender', 'name username avatar');
+            const { getIO } = await import('@/lib/socket');
+            const io = getIO();
+            if (io) {
+              const roomId = [payload.userId, receiverId].sort().join('_');
+              io.to(roomId).emit('new_message', {
+                message: populatedAuto.toObject(),
+                from: receiverId,
+              });
+              io.to(`user:${payload.userId}`).emit('new_message', {
+                message: populatedAuto.toObject(),
+                from: receiverId,
+              });
+            }
+          }
+        } catch (autoErr) {
+          console.error('[Business Auto-Reply Error]:', autoErr);
+        }
       }
     }
 
