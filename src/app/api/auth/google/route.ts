@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { sendWelcomeEmail } from '@/lib/mailer';
 import { OAuth2Client } from 'google-auth-library';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -104,6 +105,18 @@ export async function POST(request: NextRequest) {
           ...(gender && { gender }),
           ...(birthday && { birthday: new Date(birthday) }),
         });
+
+        // Send Welcome Email for new Google user (non-blocking)
+        const newUser = user;
+        if (newUser) {
+          sendWelcomeEmail(newUser.email, newUser.name || newUser.username)
+            .then(() => {
+              console.log('>>> [GOOGLE-AUTH] Welcome email sent to', newUser.email);
+            })
+            .catch((emailErr: any) => {
+              console.error('>>> [GOOGLE-AUTH] Welcome email failed:', emailErr.message);
+            });
+        }
       }
     } else {
       // User exists, update online status and active time

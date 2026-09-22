@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { sendWelcomeEmail } from '@/lib/mailer';
 
 function corsHeaders() {
   return {
@@ -56,6 +57,15 @@ export async function POST(request: NextRequest) {
     user.lastSeen = new Date();
     user.lastActiveAt = new Date();
     await user.save();
+
+    // Send Welcome Email (non-blocking background task)
+    sendWelcomeEmail(user.email, user.name || user.username)
+      .then(() => {
+        console.log('>>> [VERIFY-EMAIL] Welcome email sent to', user.email);
+      })
+      .catch((emailErr: any) => {
+        console.error('>>> [VERIFY-EMAIL] Welcome email failed:', emailErr.message);
+      });
 
     const deviceId = request.headers.get('x-device-id');
     if (deviceId) {

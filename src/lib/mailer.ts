@@ -48,137 +48,114 @@ function getBaseUrl(): string {
   return 'http://130.210.13.242:3000';
 }
 
-function otpEmailHtml(
-  title: string,
-  subtitle: string,
-  code: string,
-  note: string
-) {
-  const baseUrl = getBaseUrl();
-  const logoUrl = `${baseUrl}/novix_vpn.png`;
-  const year = new Date().getFullYear();
+/**
+ * Wraps plain text content into a clean, normal-text email representation.
+ * Avoids heavy dark cards, complex tables, and bloated styling so that emails
+ * appear as standard readable messages across all clients and avoid spam classification.
+ */
+export function toNormalTextHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
-  // Split the 6-digit code into individual character cells for a stylish box display
-  const codeDigits = code.split('');
-  const digitCells = codeDigits
-    .map(
-      (d) =>
-        `<td style="width:48px;height:56px;background:#0E1621;border:2px solid #3390EC;border-radius:10px;text-align:center;vertical-align:middle;font-size:28px;font-weight:800;color:#5EBBF5;font-family:'Courier New',Courier,monospace;letter-spacing:0;">${d}</td>`
-    )
-    .join('<td style="width:6px;"></td>');
+  // Make web links clickable
+  const linkified = escaped.replace(
+    /(https?:\/\/[^\s]+)/g,
+    '<a href="$1" style="color: #0284c7; text-decoration: underline;">$1</a>'
+  );
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-  <title>${title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </head>
-<body style="margin:0;padding:0;background-color:#0E1621;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-  <!--[if mso]><table role="presentation" align="center" width="520"><tr><td><![endif]-->
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0E1621;padding:40px 16px;">
-    <tr>
-      <td align="center">
-
-        <!-- Card -->
-        <table role="presentation" cellpadding="0" cellspacing="0" width="520" style="max-width:520px;width:100%;background-color:#17212B;border-radius:20px;overflow:hidden;border:1px solid #1E2D3D;">
-
-          <!-- ══ HEADER ══ -->
-          <tr>
-            <td style="background:linear-gradient(135deg,#2B5278 0%,#1A3A5C 100%);padding:32px 40px 28px;text-align:center;">
-              <!-- Logo image with text fallback -->
-              <img src="${logoUrl}"
-                   alt="Novix Messenger"
-                   width="72"
-                   height="72"
-                   style="display:block;margin:0 auto 14px;width:72px;height:72px;border-radius:18px;object-fit:contain;background:rgba(255,255,255,0.08);"
-                   onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='inline-block';"
-              />
-              <div id="logo-fallback" style="display:none;width:72px;height:72px;background:rgba(255,255,255,0.15);border-radius:18px;margin:0 auto 14px;text-align:center;line-height:72px;">
-                <span style="font-size:36px;font-weight:900;color:#ffffff;">N</span>
-              </div>
-              <h1 style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.2px;line-height:1.3;">Novix Messenger</h1>
-              <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.55);letter-spacing:0.5px;text-transform:uppercase;">Security Notification</p>
-            </td>
-          </tr>
-
-          <!-- ══ DIVIDER ══ -->
-          <tr>
-            <td style="height:0;border-bottom:1px solid #1E2D3D;"></td>
-          </tr>
-
-          <!-- ══ BODY ══ -->
-          <tr>
-            <td style="padding:36px 40px 32px;">
-
-              <!-- Title -->
-              <h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">${title}</h2>
-              <p style="margin:0 0 30px;font-size:14px;color:#8E9CAE;line-height:1.7;">${subtitle}</p>
-
-              <!-- OTP Box -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0D1923;border-radius:14px;border:1px solid #1E2D3D;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:20px 24px 10px;text-align:center;">
-                    <p style="margin:0 0 16px;font-size:11px;font-weight:700;color:#4A6580;letter-spacing:2px;text-transform:uppercase;">Your Verification Code</p>
-                    <!-- Digit boxes -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-                      <tr>${digitCells}</tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 24px 20px;text-align:center;">
-                    <p style="margin:0;font-size:12px;color:#4A6580;">
-                      ⏱&nbsp; Expires in <strong style="color:#8E9CAE;">15 minutes</strong>
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Note -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0F1E2A;border-left:3px solid #3390EC;border-radius:0 8px 8px 0;margin-bottom:4px;">
-                <tr>
-                  <td style="padding:14px 18px;">
-                    <p style="margin:0;font-size:13px;color:#7D8E9A;line-height:1.65;">${note}</p>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- ══ FOOTER ══ -->
-          <tr>
-            <td style="background-color:#111B25;padding:22px 40px;border-top:1px solid #1E2D3D;text-align:center;">
-              <p style="margin:0 0 6px;font-size:12px;color:#4A6580;line-height:1.5;">
-                If you didn't request this, you can safely ignore this email.<br/>
-                Your account remains secure.
-              </p>
-              <p style="margin:10px 0 0;font-size:11px;color:#2E3F4F;">
-                © ${year} Novix Messenger &nbsp;·&nbsp;
-                <a href="${baseUrl}" style="color:#3390EC;text-decoration:none;">novixvpn.com</a>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-        <!-- /Card -->
-
-      </td>
-    </tr>
-  </table>
-  <!--[if mso]></td></tr></table><![endif]-->
+<body style="margin: 0; padding: 24px 16px; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #1f2937;">
+  <div style="max-width: 580px; margin: 0 auto; white-space: pre-wrap; word-break: break-word;">
+${linkified}
+  </div>
 </body>
 </html>`;
 }
 
-async function sendMail(
-  to: string,
-  subject: string,
-  html: string,
-  label: string
+export function otpEmailText(
+  title: string,
+  subtitle: string,
+  code: string,
+  note?: string
+): string {
+  const baseUrl = getBaseUrl();
+
+  let text = `Hello,\n\n${subtitle}\n\n`;
+  text += `Your verification code is: ${code}\n\n`;
+  if (note) {
+    // Strip any HTML tags if passed from legacy callers
+    const cleanNote = note.replace(/<[^>]+>/g, '');
+    text += `${cleanNote}\n\n`;
+  } else {
+    text += `This code is valid for 15 minutes. For security reasons, please do not share this code with anyone.\n\n`;
+  }
+  text += `If you did not request this email, you can safely ignore it.\n\n`;
+  text += `Best regards,\nNovix Messenger Team\n${baseUrl}`;
+
+  return text;
+}
+
+/**
+ * Legacy compatibility export for HTML OTP email template,
+ * now returning clean, normal text HTML.
+ */
+export function otpEmailHtml(
+  title: string,
+  subtitle: string,
+  code: string,
+  note: string
+): string {
+  return toNormalTextHtml(otpEmailText(title, subtitle, code, note));
+}
+
+export interface SendMailOptions {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  label?: string;
+}
+
+export async function sendMail(
+  optionsOrTo: string | SendMailOptions,
+  subjectParam?: string,
+  textOrHtmlParam?: string,
+  labelParam: string = 'Email'
 ): Promise<void> {
+  let to: string;
+  let subject: string;
+  let text: string;
+  let html: string | undefined;
+  let label: string;
+
+  if (typeof optionsOrTo === 'object' && optionsOrTo !== null) {
+    to = optionsOrTo.to;
+    subject = optionsOrTo.subject;
+    text = optionsOrTo.text;
+    html = optionsOrTo.html ?? toNormalTextHtml(text);
+    label = optionsOrTo.label || 'Email';
+  } else {
+    to = optionsOrTo;
+    subject = subjectParam || '';
+    const body = textOrHtmlParam || '';
+    label = labelParam;
+
+    if (body.includes('<html') || body.includes('</div>') || body.includes('</p>')) {
+      html = body;
+      text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    } else {
+      text = body;
+      html = toNormalTextHtml(body);
+    }
+  }
+
   const { user, pass } = getCredentials();
 
   if (!user || !pass || user === 'your-email@gmail.com' || pass === 'your-16-digit-app-password') {
@@ -189,10 +166,11 @@ async function sendMail(
 
   console.log(`[Mailer] Sending ${label} to ${to} via Gmail SMTP (${user})...`);
   const transporter = getTransporter();
-  const mailOptions = {
+  const mailOptions: nodemailer.SendMailOptions = {
     from: `"Novix Messenger" <${user}>`,
     to,
     subject,
+    text,
     html,
   };
 
@@ -202,135 +180,166 @@ async function sendMail(
 
 export async function sendVerificationEmail(
   to: string,
-  code: string
+  code: string,
+  name?: string
 ): Promise<void> {
   console.log(`\n✉️  [MAIL] Verification OTP code for ${to} is: ${code}\n`);
-  await sendMail(
+  const greeting = name ? `Hello ${name},` : 'Hello,';
+  const text = `${greeting}
+
+Thank you for signing up for Novix Messenger!
+
+Your verification code is: ${code}
+
+This code is valid for 15 minutes. For security reasons, please do not share this code with anyone.
+
+If you did not request this verification code, you can safely ignore this email.
+
+Best regards,
+Novix Messenger Team
+${getBaseUrl()}`;
+
+  await sendMail({
     to,
-    `${code} — Verify your Novix account`,
-    otpEmailHtml(
-      'Verify Your Email',
-      'Thanks for signing up! Enter the code below to verify your email address and activate your account.',
-      code,
-      'This code expires in <strong style="color:#fff;">15 minutes</strong>. Do not share it with anyone.'
-    ),
-    'VerificationEmail'
-  );
+    subject: `${code} is your Novix Messenger verification code`,
+    text,
+    html: toNormalTextHtml(text),
+    label: 'VerificationEmail',
+  });
 }
 
 export async function sendPasswordResetEmail(
   to: string,
-  code: string
+  code: string,
+  name?: string
 ): Promise<void> {
   console.log(`\n✉️  [MAIL] Password Reset OTP code for ${to} is: ${code}\n`);
-  await sendMail(
+  const greeting = name ? `Hello ${name},` : 'Hello,';
+  const text = `${greeting}
+
+We received a request to reset the password for your Novix Messenger account.
+
+Your password reset code is: ${code}
+
+This code is valid for 15 minutes.
+
+If you did not request a password reset, you can safely ignore this email. Your account remains secure.
+
+Best regards,
+Novix Messenger Team
+${getBaseUrl()}`;
+
+  await sendMail({
     to,
-    `${code} — Reset your Novix password`,
-    otpEmailHtml(
-      'Reset Your Password',
-      'We received a request to reset the password for your Novix account. Enter the code below to proceed.',
-      code,
-      'This code expires in <strong style="color:#fff;">15 minutes</strong>. If you did not request a password reset, please ignore this email.'
-    ),
-    'PasswordResetEmail'
-  );
+    subject: `${code} is your Novix Messenger password reset code`,
+    text,
+    html: toNormalTextHtml(text),
+    label: 'PasswordResetEmail',
+  });
 }
 
 export async function sendEmailChangeEmail(
   to: string,
-  code: string
+  code: string,
+  name?: string
 ): Promise<void> {
   console.log(`\n✉️  [MAIL] Email Change OTP code for ${to} is: ${code}\n`);
-  await sendMail(
+  const greeting = name ? `Hello ${name},` : 'Hello,';
+  const text = `${greeting}
+
+We received a request to confirm this address as the new email for your Novix Messenger account.
+
+Your confirmation code is: ${code}
+
+This code is valid for 15 minutes. Your email address will not change until this code is verified.
+
+If you did not request this change, you can safely ignore this email and review your account security.
+
+Best regards,
+Novix Messenger Team
+${getBaseUrl()}`;
+
+  await sendMail({
     to,
-    `${code} — Confirm your new Novix email`,
-    otpEmailHtml(
-      'Confirm Email Change',
-      'Enter the code below to confirm this as the new email address for your Novix account.',
-      code,
-      'This code expires in <strong style="color:#fff;">15 minutes</strong>. Your email will not change until you enter this code.'
-    ),
-    'EmailChangeEmail'
-  );
+    subject: `${code} is your Novix Messenger email change code`,
+    text,
+    html: toNormalTextHtml(text),
+    label: 'EmailChangeEmail',
+  });
+}
+
+export async function sendWelcomeEmail(
+  to: string,
+  name?: string
+): Promise<void> {
+  console.log(`\n✉️  [MAIL] Sending Welcome Email to ${to}\n`);
+  const greeting = name ? `Hello ${name},` : 'Hello,';
+  const text = `${greeting}
+
+Welcome to Novix Messenger! Your account has been verified and is ready to use.
+
+Novix Messenger offers fast, secure, and private messaging across all your devices.
+
+Here are a few quick tips to get started:
+• Complete your profile and avatar
+• Connect with friends and family
+• Start private chats or create groups and channels
+• Make crystal-clear voice and video calls
+
+If you have any questions or need assistance, feel free to visit our website or reach out to our team.
+
+Welcome aboard!
+
+Best regards,
+Novix Messenger Team
+${getBaseUrl()}`;
+
+  await sendMail({
+    to,
+    subject: 'Welcome to Novix Messenger!',
+    text,
+    html: toNormalTextHtml(text),
+    label: 'WelcomeEmail',
+  });
 }
 
 export function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+export function adminNotificationEmailText(
+  title: string,
+  badgeText: string,
+  message: string,
+  metadataItems: { label: string; value: string }[] = []
+): string {
+  let text = `[NOVIX ADMIN NOTIFICATION - ${badgeText}]\n\n`;
+  text += `${title}\n\n`;
+  text += `${message}\n\n`;
+
+  if (metadataItems.length > 0) {
+    text += `Details:\n`;
+    for (const item of metadataItems) {
+      text += `• ${item.label}: ${item.value}\n`;
+    }
+    text += `\n`;
+  }
+
+  const adminUrl = `${getBaseUrl()}/admin`;
+  text += `Admin Console: ${adminUrl}\n\n`;
+  text += `Server Time: ${new Date().toUTCString()}\n`;
+  text += `—\nNovix Messenger System Alert`;
+
+  return text;
+}
+
 export function adminNotificationEmailHtml(
   title: string,
   badgeText: string,
   message: string,
-  metadataItems: { label: string; value: string }[]
-) {
-  const metadataRows = metadataItems
-    .map(
-      (item) => `
-      <tr>
-        <td style="padding:8px 0;color:#8E9CAE;font-size:13px;width:140px;font-weight:600;">${item.label}</td>
-        <td style="padding:8px 0;color:#FFFFFF;font-size:13px;font-weight:700;">${item.value}</td>
-      </tr>`
-    )
-    .join('');
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>${title}</title>
-</head>
-<body style="margin:0;padding:0;background:#0A0F1D;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A0F1D;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0" style="background:#131B2E;border-radius:18px;border:1px solid #1E293B;overflow:hidden;max-width:520px;width:100%;">
-          <!-- Header -->
-          <tr>
-            <td style="background:linear-gradient(135deg,#2563EB,#4F46E5);padding:28px 36px;text-align:left;">
-              <span style="display:inline-block;padding:4px 10px;background:rgba(255,255,255,0.2);border-radius:20px;color:#FFFFFF;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-                ${badgeText}
-              </span>
-              <h1 style="margin:0;font-size:22px;font-weight:800;color:#FFFFFF;letter-spacing:-0.4px;">${title}</h1>
-              <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.85);">Novix Messenger Admin Console Alert</p>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px 36px;">
-              <p style="margin:0 0 20px;font-size:15px;color:#CBD5E1;line-height:1.6;">${message}</p>
-              
-              ${metadataItems.length > 0
-      ? `
-              <div style="background:#0F172A;border:1px solid #1E293B;border-radius:12px;padding:18px 22px;margin:20px 0;">
-                <table width="100%" cellpadding="0" cellspacing="0">
-                  ${metadataRows}
-                </table>
-              </div>`
-      : ''
-    }
-
-              <div style="text-align:center;margin-top:28px;">
-                <a href="${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3000'}/admin" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;">
-                  Open Admin Console &rarr;
-                </a>
-              </div>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 36px;background:#0B1120;border-top:1px solid #1E293B;text-align:center;">
-              <p style="margin:0;font-size:11px;color:#64748B;">You received this email because this address is configured in Novix Messenger Admin Settings.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  metadataItems: { label: string; value: string }[] = []
+): string {
+  return toNormalTextHtml(adminNotificationEmailText(title, badgeText, message, metadataItems));
 }
 
 export async function sendAdminNotificationEmail({
@@ -349,10 +358,12 @@ export async function sendAdminNotificationEmail({
   metadataItems?: { label: string; value: string }[];
 }): Promise<void> {
   console.log(`\n🔔 [ADMIN MAIL] Sending alert to ${to}: ${subject}\n`);
-  await sendMail(
+  const text = adminNotificationEmailText(title, badgeText, message, metadataItems);
+  await sendMail({
     to,
-    `[Novix Admin] ${subject}`,
-    adminNotificationEmailHtml(title, badgeText, message, metadataItems),
-    'AdminNotification'
-  );
+    subject: `[Novix Admin] ${subject}`,
+    text,
+    html: toNormalTextHtml(text),
+    label: 'AdminNotification',
+  });
 }
