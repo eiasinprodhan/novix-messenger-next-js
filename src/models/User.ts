@@ -59,6 +59,8 @@ export interface IUser extends Document {
   isPremium?: boolean;
   premiumExpiresAt?: Date;
   premiumPlan?: 'monthly' | 'annual' | 'lifetime';
+  emojiStatus?: string;
+  stealthMode?: boolean;
   starsBalance?: number;
   starTransactions?: {
     id: string;
@@ -193,7 +195,9 @@ const UserSchema: Schema<IUser> = new Schema(
     // Novix Features
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date },
-    premiumPlan: { type: String, enum: ['monthly', 'annual'], default: null },
+    premiumPlan: { type: String, enum: ['monthly', 'annual', 'lifetime'], default: null },
+    emojiStatus: { type: String, default: null },
+    stealthMode: { type: Boolean, default: false },
     starsBalance: { type: Number, default: 250 }, // 250 starter stars for fun!
     starTransactions: [
       {

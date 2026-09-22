@@ -5,8 +5,10 @@ export interface IMessage extends Document {
   receiver?: mongoose.Types.ObjectId;      // For 1:1 chats
   group?: mongoose.Types.ObjectId;         // For group chats
   content: string;
-  type: 'text' | 'image' | 'system' | 'audio' | 'voice' | 'video' | 'document' | 'call' | 'poll';
+  type: 'text' | 'image' | 'system' | 'audio' | 'voice' | 'video' | 'document' | 'call' | 'poll' | 'checklist';
   imageUrl?: string;
+  effect?: string;
+  transcription?: string;
   status: 'sent' | 'delivered' | 'read';
   isDeleted: boolean;
   isPinned: boolean;
@@ -37,6 +39,10 @@ export interface IMessage extends Document {
     isQuiz?: boolean;
     correctAnswerIndex?: number;
     isClosed?: boolean;
+  };
+  checklist?: {
+    title: string;
+    items: { id: string; text: string; completed: boolean; completedBy?: mongoose.Types.ObjectId }[];
   };
   deletedBy: mongoose.Types.ObjectId[];
   replyTo?: mongoose.Types.ObjectId;
@@ -71,11 +77,19 @@ const MessageSchema: Schema<IMessage> = new Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'image', 'system', 'audio', 'voice', 'video', 'document', 'call', 'poll'],
+      enum: ['text', 'image', 'system', 'audio', 'voice', 'video', 'document', 'call', 'poll', 'checklist'],
       default: 'text',
     },
     imageUrl: {
       type: String,
+    },
+    effect: {
+      type: String,
+      default: null,
+    },
+    transcription: {
+      type: String,
+      default: null,
     },
     status: {
       type: String,
@@ -142,6 +156,17 @@ const MessageSchema: Schema<IMessage> = new Schema(
       isQuiz: { type: Boolean, default: false },
       correctAnswerIndex: { type: Number },
       isClosed: { type: Boolean, default: false },
+    },
+    checklist: {
+      title: { type: String, default: '' },
+      items: [
+        {
+          id: { type: String, required: true },
+          text: { type: String, required: true },
+          completed: { type: Boolean, default: false },
+          completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        },
+      ],
     },
     deletedBy: [
       {

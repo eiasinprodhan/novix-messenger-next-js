@@ -114,12 +114,17 @@ export async function GET(request: NextRequest) {
     let premiumExpiresAt: Date | null = null;
     let premiumPlan: string | null = null;
 
+    let emojiStatus: string | null = null;
+    let stealthMode = false;
+
     if (payload?.userId) {
-      const user = await User.findById(payload.userId).select('isPremium premiumExpiresAt premiumPlan');
+      const user = await User.findById(payload.userId).select('isPremium premiumExpiresAt premiumPlan emojiStatus stealthMode');
       if (user) {
         isPremium = !!user.isPremium;
         premiumExpiresAt = user.premiumExpiresAt || null;
         premiumPlan = user.premiumPlan || null;
+        emojiStatus = user.emojiStatus || null;
+        stealthMode = !!user.stealthMode;
       }
     }
 
@@ -127,6 +132,8 @@ export async function GET(request: NextRequest) {
       isPremium,
       premiumExpiresAt,
       premiumPlan,
+      emojiStatus,
+      stealthMode,
       features: PREMIUM_FEATURES,
       plans: PREMIUM_PLANS,
     });
@@ -194,3 +201,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Failed to activate premium' }, { status: 500 });
   }
 }
+
+// PATCH /api/premium - Update emojiStatus, stealthMode
+export async function PATCH(request: NextRequest) {
+  try {
+    await connectDB();
+    const payload = getUserFromRequest(request);
+    if (!payload?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const user = await User.findById(payload.userId);
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (body.emojiStatus !== undefined) {
+      user.emojiStatus = body.emojiStatus;
+    }
+    if (body.stealthMode !== undefined) {
+      user.stealthMode = !!body.stealthMode;
+    }
+
+    await user.save();
+
+    return NextResponse.json({
+      success: true,
+      emojiStatus: user.emojiStatus,
+      stealthMode: user.stealthMode,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Failed to update premium settings' }, { status: 500 });
+  }
+}
+

@@ -121,6 +121,9 @@ export async function POST(request: NextRequest) {
       forwardFrom,
       attachments,
       poll,
+      checklist,
+      effect,
+      transcription,
       topicId,
       expiresAt,
       isSilent = false,
@@ -129,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     const isFutureScheduled = scheduledFor && new Date(scheduledFor).getTime() > Date.now();
 
-    if (!groupId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
+    if (!groupId || (!content && !imageUrl && !attachments?.length && !poll && !checklist && !forwardFrom)) {
       return NextResponse.json({ error: 'groupId and content/attachments/poll required' }, { status: 400 });
     }
 
@@ -188,6 +191,9 @@ export async function POST(request: NextRequest) {
       forwardFrom: forwardFrom || undefined,
       attachments: attachments || [],
       poll: poll || undefined,
+      checklist: checklist || undefined,
+      effect: effect || null,
+      transcription: transcription || null,
       topicId: topicId || undefined,
       expiresAt: computedExpiresAt,
       isSilent: Boolean(isSilent),

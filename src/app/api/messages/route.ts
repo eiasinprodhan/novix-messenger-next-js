@@ -153,13 +153,16 @@ export async function POST(request: NextRequest) {
       forwardFrom,
       attachments,
       poll,
+      checklist,
+      effect,
+      transcription,
       topicId,
       expiresAt,
       isSilent = false,
       scheduledFor,
     } = await request.json();
 
-    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !forwardFrom)) {
+    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !checklist && !forwardFrom)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -168,7 +171,7 @@ export async function POST(request: NextRequest) {
 
     // Check if either user is an admin
     const senderUserObj = await User.findById(payload.userId).select('role');
-    const receiverUserObj = await User.findById(receiverId).select('role businessSettings fcmToken name avatar');
+    const receiverUserObj = await User.findById(receiverId).select('role businessSettings fcmToken name avatar isPremium');
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
@@ -240,6 +243,9 @@ export async function POST(request: NextRequest) {
       forwardFrom: forwardFrom || undefined,
       attachments: attachments || [],
       poll: poll || undefined,
+      checklist: checklist || undefined,
+      effect: effect || null,
+      transcription: transcription || null,
       topicId: topicId || undefined,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       isSilent: Boolean(isSilent),
@@ -277,7 +283,8 @@ export async function POST(request: NextRequest) {
       }
 
       // ── Automated Business Auto-Reply (Greeting & Away Messages) ──
-      if (receiverUserObj?.businessSettings?.isEnabled && !isSelfSavedMessages) {
+      const isBusiness = receiverUserObj?.businessSettings?.isEnabled || receiverUserObj?.isPremium;
+      if (isBusiness && !isSelfSavedMessages && receiverUserObj?.businessSettings) {
         try {
           const bs = receiverUserObj.businessSettings;
           let autoReplyText: string | null = null;

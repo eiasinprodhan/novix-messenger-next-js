@@ -29,34 +29,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await User.findById(payload.userId).select('businessSettings name username');
+    const user = await User.findById(payload.userId).select('businessSettings name username isPremium');
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const settings = user.businessSettings || {
-      isEnabled: false,
-      location: { address: '', showOnProfile: true },
-      openingHours: { enabled: false, schedule: DEFAULT_OPENING_HOURS },
-      quickReplies: DEFAULT_QUICK_REPLIES,
-      greetingMessage: {
-        enabled: false,
-        text: 'Hello! Thank you for reaching out. How can I assist you today?',
-        recipients: 'all',
-      },
-      awayMessage: {
-        enabled: false,
-        text: 'I am currently away. I will get back to you as soon as possible!',
-        schedule: 'outside_hours',
-      },
-      businessIntro: {
-        title: user.name ? `${user.name} Business` : 'Welcome',
-        message: 'Welcome to our official business chat! Feel free to ask any questions.',
-      },
-      chatbot: {
-        enabled: false,
-        botUsername: '',
-      },
+    const rawSettings = user.businessSettings;
+    const settings = {
+      ...(rawSettings || {
+        location: { address: '', showOnProfile: true },
+        openingHours: { enabled: false, schedule: DEFAULT_OPENING_HOURS },
+        quickReplies: DEFAULT_QUICK_REPLIES,
+        greetingMessage: {
+          enabled: false,
+          text: 'Hello! Thank you for reaching out. How can I assist you today?',
+          recipients: 'all',
+        },
+        awayMessage: {
+          enabled: false,
+          text: 'I am currently away. I will get back to you as soon as possible!',
+          schedule: 'outside_hours',
+        },
+        businessIntro: {
+          title: user.name ? `${user.name} Business` : 'Welcome',
+          message: 'Welcome to our official business chat! Feel free to ask any questions.',
+        },
+        chatbot: {
+          enabled: false,
+          botUsername: '',
+        },
+      }),
+      isEnabled: user.isPremium ? true : (rawSettings?.isEnabled ?? false),
     };
 
     return NextResponse.json({

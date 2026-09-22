@@ -18,8 +18,19 @@ export async function POST(
       return NextResponse.json({ error: 'Story not found' }, { status: 404 });
     }
 
-    // Do not add the owner to viewers
-    if (story.user.toString() !== payload.userId) {
+    // Check stealth mode for premium users
+    const body = await request.json().catch(() => ({}));
+    let isStealth = body.stealth === true;
+    if (!isStealth) {
+      const User = (await import('@/models/User')).default;
+      const viewerUser = await User.findById(payload.userId).select('isPremium stealthMode');
+      if (viewerUser?.isPremium && viewerUser?.stealthMode) {
+        isStealth = true;
+      }
+    }
+
+    // Do not add the owner to viewers or stealth viewers
+    if (story.user.toString() !== payload.userId && !isStealth) {
       if (!story.viewers) {
         story.viewers = [];
       }

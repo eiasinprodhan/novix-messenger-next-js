@@ -56,7 +56,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, username, bio, avatar, gender, country, birthday, phone } = body;
+    const { name, username, bio, avatar, gender, country, birthday, phone, emojiStatus, stealthMode } = body;
 
     const updateData: any = {};
     if (name) updateData.name = name.trim();
@@ -64,6 +64,8 @@ export async function PUT(
     if (phone !== undefined) updateData.phone = String(phone).trim();
     if (bio !== undefined) updateData.bio = bio.trim();
     if (avatar !== undefined) updateData.avatar = avatar; // support avatar URL
+    if (emojiStatus !== undefined) updateData.emojiStatus = emojiStatus;
+    if (stealthMode !== undefined) updateData.stealthMode = !!stealthMode;
     if (gender !== undefined) {
       const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
       if (!validGenders.includes(gender)) {
