@@ -45,7 +45,7 @@ function getBaseUrl(): string {
   // Prefer the public-facing URL from env, strip /api suffix
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
   if (apiUrl) return apiUrl.replace(/\/api\/?$/, '');
-  return 'http://130.210.13.242:3000';
+  return 'https://novixmessenger.online';
 }
 
 /**

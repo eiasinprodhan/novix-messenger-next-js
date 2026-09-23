@@ -14,6 +14,8 @@ function isOriginAllowed(origin: string): boolean {
     if (
       host === 'localhost' ||
       host === '127.0.0.1' ||
+      host === 'novixmessenger.online' ||
+      host.endsWith('.novixmessenger.online') ||
       host.endsWith('.trycloudflare.com') ||
       host.endsWith('.onrender.com') ||
       /^192\.168\.\d+\.\d+$/.test(host) ||

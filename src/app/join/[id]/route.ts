@@ -99,7 +99,7 @@ export async function GET(
   <script>
     function joinGroup() {
       // Android Intent URL — the reliable way Chrome opens installed apps
-      var intentUrl = "intent://join/${id}#Intent;scheme=novix;package=com.novix.messenger.novix_messenger;S.browser_fallback_url=http%3A%2F%2F130.210.13.242%3A3000%2Fjoin%2F${id};end";
+      var intentUrl = "intent://join/${id}#Intent;scheme=novix;package=com.novix.messenger.novix_messenger;S.browser_fallback_url=https%3A%2F%2Fnovixmessenger.online%2Fjoin%2F${id};end";
       window.location.href = intentUrl;
     }
   </script>
