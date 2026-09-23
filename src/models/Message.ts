@@ -194,13 +194,14 @@ const MessageSchema: Schema<IMessage> = new Schema(
   { timestamps: true }
 );
 
-if (mongoose.models.Message) {
-  try { mongoose.deleteModel('Message'); } catch (_) {}
-}
-if ((mongoose as any).modelSchemas && (mongoose as any).modelSchemas.Message) {
-  delete (mongoose as any).modelSchemas.Message;
-}
+// Compound Indexes for high-performance messaging queries
+MessageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
+MessageSchema.index({ receiver: 1, sender: 1, createdAt: -1 });
+MessageSchema.index({ receiver: 1, status: 1 });
+MessageSchema.index({ group: 1, createdAt: -1 });
+MessageSchema.index({ createdAt: -1 });
 
-const Message: Model<IMessage> = mongoose.model<IMessage>('Message', MessageSchema);
+const Message: Model<IMessage> =
+  mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);
 
 export default Message;

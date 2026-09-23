@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Friendship from '@/models/Friendship';
 import User from '@/models/User';
@@ -45,7 +46,32 @@ export async function GET(request: NextRequest) {
     let friendships = await Friendship.find(query)
       .populate('requester', 'name username avatar isOnline lastSeen role')
       .populate('recipient', 'name username avatar isOnline lastSeen role')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Batch query unread message counts in a single aggregation for all friends
+    const userObjId = new mongoose.Types.ObjectId(payload.userId);
+    const unreadCountsAgg = await Message.aggregate([
+      {
+        $match: {
+          receiver: userObjId,
+          status: { $ne: 'read' },
+          deletedBy: { $ne: userObjId },
+        },
+      },
+      {
+        $group: {
+          _id: '$sender',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    const unreadMap = new Map<string, number>();
+    for (const row of unreadCountsAgg) {
+      if (row._id) {
+        unreadMap.set(row._id.toString(), row.count);
+      }
+    }
 
     // Filter out friendships where either user has role 'admin'
     const results = await Promise.all(friendships.map(async (f: any) => {
@@ -54,7 +80,7 @@ export async function GET(request: NextRequest) {
       const otherUser = isRequester ? f.recipient : f.requester;
       const isAdminChat = otherUser.role === 'admin';
 
-      // Get last message for this friendship
+      // Get last message for this friendship (uses compound index)
       const lastMessage = await Message.findOne({
         $or: [
           { sender: payload.userId, receiver: otherUser._id },
@@ -63,18 +89,13 @@ export async function GET(request: NextRequest) {
         deletedBy: { $ne: payload.userId },
       })
         .sort({ createdAt: -1 })
-        .select('content createdAt sender type imageUrl status');
+        .select('content createdAt sender type imageUrl status')
+        .lean();
 
       // For admin chats: only include if there's at least one message
       if (isAdminChat && !lastMessage) return null;
 
-      // Get unread message count (sent by otherUser to current user and status is not read)
-      const unreadCount = await Message.countDocuments({
-        sender: otherUser._id,
-        receiver: payload.userId,
-        status: { $ne: 'read' },
-        deletedBy: { $ne: payload.userId },
-      });
+      const unreadCount = unreadMap.get(otherUser._id.toString()) || 0;
 
       return {
         _id: f._id,
@@ -111,8 +132,8 @@ export async function GET(request: NextRequest) {
     let finalResponse;
     // For 'friends' type, filter out chats the user has hidden (deleted from their view)
     if (type === 'friends' && !includeHidden) {
-      const currentUser = await User.findById(payload.userId).select('hiddenChats');
-      const hiddenIds = (currentUser?.hiddenChats ?? []).map((id: any) => id.toString());
+      const currentUser = await User.findById(payload.userId).select('hiddenChats').lean();
+      const hiddenIds = ((currentUser as any)?.hiddenChats ?? []).map((id: any) => id.toString());
       const filtered = validResults.filter((r: any) => !hiddenIds.includes(r.otherUser._id.toString()));
       finalResponse = { friendships: filtered };
     } else {

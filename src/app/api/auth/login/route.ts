@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
 import { generateOTP, sendVerificationEmail } from '@/lib/mailer';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 function corsHeaders() {
   return {
@@ -18,7 +19,20 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('>>> [LOGIN] POST received');
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(`login:${ip}`, { limit: 12, windowMs: 60 * 1000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please wait a minute before trying again.' },
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders(),
+          'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+        },
+      }
+    );
+  }
 
   try {
     await connectDB();

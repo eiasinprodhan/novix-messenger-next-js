@@ -308,10 +308,11 @@ export function initSocketServer(server: NetServer) {
       roomName: string;
       callerInfo: { id: string; name: string; avatar?: string };
       callId: string;
+      isVideo?: boolean;
     }) => {
       const callerId = socket.data.userId;
       if (!callerId) return;
-      console.log(`📞 [LiveKit] call_offer from ${callerId} → ${data.targetUserId}, room: ${data.roomName}`);
+      console.log(`📞 [LiveKit] call_offer from ${callerId} → ${data.targetUserId}, room: ${data.roomName}, isVideo: ${!!data.isVideo}`);
 
       const incomingCallPayload = {
         callId: data.callId,
@@ -319,6 +320,7 @@ export function initSocketServer(server: NetServer) {
         roomName: data.roomName,
         callerInfo: data.callerInfo,
         isGroup: false,
+        isVideo: !!data.isVideo,
       };
 
       // Emit via socket (for online users)
@@ -339,6 +341,7 @@ export function initSocketServer(server: NetServer) {
                 roomName: data.roomName,
                 callerName: data.callerInfo.name,
                 callerAvatar: data.callerInfo.avatar ?? '',
+                isVideo: String(!!data.isVideo),
               },
               android: {
                 priority: 'high',
@@ -354,7 +357,7 @@ export function initSocketServer(server: NetServer) {
                 },
               },
             });
-            console.log(`[FCM] Call notification sent to user ${data.targetUserId}`);
+            console.log(`[FCM] Call notification sent to user ${data.targetUserId} (isVideo: ${!!data.isVideo})`);
           }
         } catch (e) {
           console.error('[FCM] Failed to send call notification:', e);
@@ -369,10 +372,11 @@ export function initSocketServer(server: NetServer) {
       callerInfo: { id: string; name: string; avatar?: string };
       callId: string;
       targetUserIds: string[];
+      isVideo?: boolean;
     }) => {
       const callerId = socket.data.userId;
       if (!callerId) return;
-      console.log(`📞 [LiveKit] group_call_offer from ${callerId} → group:${data.groupId}, room: ${data.roomName}`);
+      console.log(`📞 [LiveKit] group_call_offer from ${callerId} → group:${data.groupId}, room: ${data.roomName}, isVideo: ${!!data.isVideo}`);
       data.targetUserIds.forEach((uid) => {
         if (uid !== callerId) {
           io?.to(`user:${uid}`).emit('incoming_call', {
@@ -382,6 +386,7 @@ export function initSocketServer(server: NetServer) {
             roomName: data.roomName,
             callerInfo: data.callerInfo,
             isGroup: true,
+            isVideo: !!data.isVideo,
           });
         }
       });
@@ -408,6 +413,7 @@ export function initSocketServer(server: NetServer) {
                   callerName: data.callerInfo.name,
                   callerAvatar: data.callerInfo.avatar ?? '',
                   isGroup: 'true',
+                  isVideo: String(!!data.isVideo),
                 },
                 android: {
                   priority: 'high',

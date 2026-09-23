@@ -311,40 +311,23 @@ const UserSchema: Schema<IUser> = new Schema(
   { timestamps: true }
 );
 
+// Indexes for fast contact syncing and presence queries
+UserSchema.index({ phone: 1 });
+UserSchema.index({ isOnline: 1, lastSeen: -1 });
+UserSchema.index({ role: 1 });
 
-// ========================================================================
-// THIS IS THE CORRECT VERSION (V12 - FINAL)
-// Pure async pre('save') — NO "next" is ever used or declared.
-// This completely fixes "TypeError: next is not a function"
-// ========================================================================
-
-console.log('>>> [User.ts V12] Loading User model...');
-
-// 1. Kill every possible cached version of the model
-if (mongoose.models.User) {
-  try { mongoose.deleteModel('User'); } catch (_) {}
-}
-if ((mongoose as any).modelSchemas && (mongoose as any).modelSchemas.User) {
-  delete (mongoose as any).modelSchemas.User;
-}
-
-// 2. PURE ASYNC PRE HOOK (the only correct way in 2026)
+// Async pre-save hook for password hashing
 UserSchema.pre('save', async function () {
   const user = this as any;
-
-  console.log('>>> [User pre-save V12] PURE ASYNC hook running for:', user.email);
-
-  if (!user.isModified('password')) {
-    console.log('>>> [User pre-save V12] password unchanged — skipping');
+  if (!user.isModified('password') || !user.password) {
     return;
   }
 
   try {
     const salt = await bcrypt.genSalt(12);
     user.password = await bcrypt.hash(user.password, salt);
-    console.log('>>> [User pre-save V12] ✅ password hashed successfully');
   } catch (err: any) {
-    console.error('>>> [User pre-save V12] HASH ERROR:', err);
+    console.error('>>> [User pre-save] HASH ERROR:', err);
     throw err;
   }
 });
@@ -364,8 +347,7 @@ UserSchema.set('toJSON', {
   },
 });
 
-const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
-
-console.log('>>> [User.ts V12] User model registered (pure async hook)');
+const User: Model<IUser> =
+  mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 
 export default User;

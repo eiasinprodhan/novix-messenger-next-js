@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import SystemSetting from '@/models/SystemSetting';
-import { generateOTP, sendVerificationEmail, sendAdminNotificationEmail } from '@/lib/mailer';
-
+import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
+import { sendWelcomeEmail, sendAdminNotificationEmail } from '@/lib/mailer';
 import { getCountryFromRequest } from '@/lib/ipCountry';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 function corsHeaders() {
   return {
@@ -20,7 +21,20 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('>>> [REGISTER] POST received');
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(`register:${ip}`, { limit: 6, windowMs: 60 * 1000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many registration attempts. Please try again shortly.' },
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders(),
+          'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+        },
+      }
+    );
+  }
 
   try {
     await connectDB();
@@ -85,9 +99,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists with this email, username, or phone number' }, { status: 409, headers: corsHeaders() });
     }
 
-    const code = generateOTP();
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
     const user = await User.create({
       name: name.trim(),
       username: username.toLowerCase().trim(),
@@ -97,19 +108,22 @@ export async function POST(request: NextRequest) {
       gender: gender || 'prefer_not_to_say',
       country: country ? country.trim() : '',
       birthday: birthdayDate,
-      isVerified: false,
-      verificationCode: code,
-      verificationCodeExpires: expires,
+      isVerified: true,
+      isOnline: true,
+      lastSeen: new Date(),
+      lastActiveAt: new Date(),
     });
 
+    const accessToken = generateAccessToken({ userId: user._id.toString(), email: user.email, role: user.role });
+    const refreshToken = generateRefreshToken({ userId: user._id.toString(), email: user.email, role: user.role });
 
-    // Send OTP email (non-blocking background task so Render does not block/timeout)
-    sendVerificationEmail(user.email, code)
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.name || user.username)
       .then(() => {
-        console.log('>>> [REGISTER] Verification email sent to', user.email);
+        console.log('>>> [REGISTER] Welcome email sent to', user.email);
       })
       .catch((emailErr: any) => {
-        console.error('>>> [REGISTER] Email send failed:', emailErr.message);
+        console.error('>>> [REGISTER] Welcome email send failed:', emailErr.message);
       });
 
     // Notify Administrator if enabled
@@ -138,12 +152,15 @@ export async function POST(request: NextRequest) {
       })
       .catch((err: any) => console.error('>>> [REGISTER] Failed to check admin settings:', err.message));
 
-    console.log('>>> [REGISTER] SUCCESS for', user.email, '— awaiting verification');
+    console.log('>>> [REGISTER] SUCCESS for', user.email, '— verified & tokens generated');
 
     return NextResponse.json({
       success: true,
-      message: 'Account created. Please check your email for a verification code.',
-      requiresVerification: true,
+      message: 'Account created successfully',
+      requiresVerification: false,
+      user: user.toJSON(),
+      accessToken,
+      refreshToken,
       userId: user._id.toString(),
       email: user.email,
     }, { status: 201, headers: corsHeaders() });

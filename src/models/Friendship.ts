@@ -29,8 +29,10 @@ const FriendshipSchema: Schema<IFriendship> = new Schema(
   { timestamps: true }
 );
 
-// Ensure no duplicate friendships
+// Ensure no duplicate friendships and fast queries
 FriendshipSchema.index({ requester: 1, recipient: 1 }, { unique: true });
+FriendshipSchema.index({ requester: 1, status: 1 });
+FriendshipSchema.index({ recipient: 1, status: 1 });
 
 const Friendship: Model<IFriendship> =
   mongoose.models.Friendship || mongoose.model<IFriendship>('Friendship', FriendshipSchema);
