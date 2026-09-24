@@ -153,7 +153,7 @@ export default function NovixHome() {
 
             {/* Download CTA */}
             <a
-              href="https://play.google.com/store"
+              href="https://play.google.com/store/apps/details?id=com.novix.messenger.novix_messenger"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-600/25 transition transform hover:-translate-y-0.5"
@@ -259,7 +259,7 @@ export default function NovixHome() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <a
-              href="https://play.google.com/store"
+              href="https://play.google.com/store/apps/details?id=com.novix.messenger.novix_messenger"
               target="_blank"
               rel="noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-base shadow-xl shadow-blue-600/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
@@ -619,7 +619,7 @@ export default function NovixHome() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <a
-                href="https://play.google.com/store"
+                href="https://play.google.com/store/apps/details?id=com.novix.messenger.novix_messenger"
                 target="_blank"
                 rel="noreferrer"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-white text-blue-600 hover:bg-blue-50 rounded-2xl font-extrabold text-base shadow-lg transition transform hover:-translate-y-0.5"
