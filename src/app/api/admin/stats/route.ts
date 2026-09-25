@@ -7,6 +7,7 @@ import Report from '@/models/Report';
 import AuditLog from '@/models/AuditLog';
 import Group from '@/models/Group';
 import Story from '@/models/Story';
+import Ad from '@/models/Ad';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -22,50 +23,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Non-admin stats calculations
-    const totalRegularUsers = await User.countDocuments({ role: { $ne: 'admin' } });
-    const onlineRegularUsers = await User.countDocuments({ role: { $ne: 'admin' }, isOnline: true });
-    const verifiedRegularUsers = await User.countDocuments({ role: { $ne: 'admin' }, isVerified: true });
-    const adminCount = await User.countDocuments({ role: 'admin' });
+    // Fetch admin user IDs to filter out admin messages
+    const adminUsers = await User.find({ role: 'admin' }).select('_id').lean();
+    const adminUserIds = adminUsers.map((u: any) => u._id);
 
-    // Fetch admin user IDs to filter out admin messages if needed
-    const adminUsers = await User.find({ role: 'admin' }).select('_id');
-    const adminUserIds = adminUsers.map((u) => u._id);
-
-    const totalMessages = await Message.countDocuments({
-      sender: { $nin: adminUserIds },
-    });
-
-    const totalFriendships = await Friendship.countDocuments({ status: 'accepted' });
-    const pendingFriendRequests = await Friendship.countDocuments({ status: 'pending' });
-
-    const totalGroups = Group ? await Group.countDocuments() : 0;
-    const totalStories = Story ? await Story.countDocuments({ user: { $nin: adminUserIds } }) : 0;
-
-    const totalReports = await Report.countDocuments();
-    const pendingReports = await Report.countDocuments({ status: 'pending' });
-    const resolvedReports = await Report.countDocuments({ status: 'resolved' });
-
-    // Recent 6 regular non-admin users
-    const recentUsers = await User.find({ role: { $ne: 'admin' } })
-      .select('name username email avatar isOnline role lastSeen createdAt')
-      .sort({ createdAt: -1 })
-      .limit(6);
-
-    // Recent 6 audit logs (added, deleted, updated)
-    const recentLogs = await AuditLog.find()
-      .populate('admin', 'name username email')
-      .sort({ createdAt: -1 })
-      .limit(6);
-
-    // Recent 5 reports
-    const recentReports = await Report.find()
-      .populate('reporter', 'name username avatar')
-      .populate('reported', 'name username avatar')
-      .sort({ createdAt: -1 })
-      .limit(5);
-
-    // Compute 7-day time series trends
+    // Compute 7-day time series trends parameters
     const now = new Date();
     const last7Days: { dateStr: string; label: string }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -74,19 +36,71 @@ export async function GET(request: NextRequest) {
       const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
       last7Days.push({ dateStr, label });
     }
-
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const messageAgg = await Message.aggregate([
-      { $match: { createdAt: { $gte: sevenDaysAgo } } },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+    // Run all database calls in parallel
+    const [
+      totalRegularUsers,
+      onlineRegularUsers,
+      verifiedRegularUsers,
+      adminCount,
+      totalMessages,
+      totalFriendships,
+      pendingFriendRequests,
+      totalGroups,
+      totalStories,
+      totalReports,
+      pendingReports,
+      resolvedReports,
+      totalAds,
+      activeAds,
+      recentUsers,
+      recentLogs,
+      recentReports,
+      messageAgg,
+      userAgg,
+    ] = await Promise.all([
+      User.countDocuments({ role: { $ne: 'admin' } }),
+      User.countDocuments({ role: { $ne: 'admin' }, isOnline: true }),
+      User.countDocuments({ role: { $ne: 'admin' }, isVerified: true }),
+      User.countDocuments({ role: 'admin' }),
+      Message.countDocuments({ sender: { $nin: adminUserIds } }),
+      Friendship.countDocuments({ status: 'accepted' }),
+      Friendship.countDocuments({ status: 'pending' }),
+      Group ? Group.countDocuments() : Promise.resolve(0),
+      Story ? Story.countDocuments({ user: { $nin: adminUserIds } }) : Promise.resolve(0),
+      Report.countDocuments(),
+      Report.countDocuments({ status: 'pending' }),
+      Report.countDocuments({ status: 'resolved' }),
+      Ad.countDocuments(),
+      Ad.countDocuments({ isActive: true, status: 'active' }),
+      User.find({ role: { $ne: 'admin' } })
+        .select('name username email avatar isOnline role lastSeen createdAt')
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .lean(),
+      AuditLog.find()
+        .populate('admin', 'name username email')
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .lean(),
+      Report.find()
+        .populate('reporter', 'name username avatar')
+        .populate('reported', 'name username avatar')
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+      Message.aggregate([
+        { $match: { createdAt: { $gte: sevenDaysAgo } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        { $match: { createdAt: { $gte: sevenDaysAgo } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+      ]),
     ]);
-    const messageCountMap = new Map(messageAgg.map((m: any) => [m._id, m.count]));
 
-    const userAgg = await User.aggregate([
-      { $match: { createdAt: { $gte: sevenDaysAgo } } },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
-    ]);
+    const messageCountMap = new Map(messageAgg.map((m: any) => [m._id, m.count]));
     const userCountMap = new Map(userAgg.map((u: any) => [u._id, u.count]));
 
     const messageTrends = last7Days.map(({ dateStr, label }) => ({
@@ -115,6 +129,8 @@ export async function GET(request: NextRequest) {
         totalReports,
         pendingReports,
         resolvedReports,
+        totalAds,
+        activeAds,
       },
       messageTrends,
       userTrends,

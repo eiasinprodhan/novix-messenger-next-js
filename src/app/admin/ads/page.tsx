@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import toast from 'react-hot-toast';
+import DeleteConfirmModal from '@/components/admin/DeleteConfirmModal';
 import {
   Layers,
   Plus,
@@ -16,7 +18,9 @@ import {
   TrendingUp,
   X,
   Globe,
-  BarChart3
+  BarChart3,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface AdCampaign {
@@ -37,6 +41,8 @@ interface AdCampaign {
 
 const CATEGORIES = ['All', 'Technology', 'Crypto', 'Gaming', 'E-Commerce', 'Social', 'General'];
 
+const ADS_CACHE_KEY = 'novix_admin_ads_cache';
+
 export default function AdminAdsPage() {
   const [ads, setAds] = useState<AdCampaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +50,24 @@ export default function AdminAdsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Restore cached ads post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ADS_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setAds(cached);
+          setLoading(false);
+        }
+      }
+    } catch {}
+  }, []);
 
   const [adsStats, setAdsStats] = useState({
     totalAds: 0,
@@ -58,6 +82,9 @@ export default function AdminAdsPage() {
   const [isAdModalOpen, setIsAdModalOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<AdCampaign | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [bannerPreview, setBannerPreview] = useState<string>('');
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [adForm, setAdForm] = useState({
     title: '',
     description: '',
@@ -82,6 +109,47 @@ export default function AdminAdsPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const uploadBannerImage = useCallback(async (file: File) => {
+    if (!file) return;
+    // Validate type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPG, PNG, WebP, GIF)');
+      return;
+    }
+    // Validate size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image too large. Max 10MB.');
+      return;
+    }
+    // Local preview
+    const objectUrl = URL.createObjectURL(file);
+    setBannerPreview(objectUrl);
+    setUploadingBanner(true);
+    try {
+      const token = localStorage.getItem('adminToken') || '';
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.imageUrl) {
+        setAdForm((prev) => ({ ...prev, imageUrl: data.imageUrl }));
+        toast.success('Banner uploaded!');
+      } else {
+        toast.error(data.error || 'Upload failed');
+        setBannerPreview('');
+      }
+    } catch {
+      toast.error('Upload failed. Check your connection.');
+      setBannerPreview('');
+    } finally {
+      setUploadingBanner(false);
+    }
+  }, []);
+
   const getHeaders = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : '';
     return {
@@ -92,7 +160,7 @@ export default function AdminAdsPage() {
 
   const fetchAds = async (isManual = false) => {
     if (isManual) setRefreshing(true);
-    else setLoading(true);
+    else if (ads.length === 0) setLoading(true);
 
     try {
       const res = await fetch('/api/admin/ads', { headers: getHeaders() });
@@ -100,6 +168,9 @@ export default function AdminAdsPage() {
       if (res.ok && data.success) {
         setAds(data.ads || []);
         if (data.stats) setAdsStats(data.stats);
+        try {
+          localStorage.setItem(ADS_CACHE_KEY, JSON.stringify(data.ads || []));
+        } catch {}
       } else {
         showNotification('error', data.error || 'Failed to fetch campaigns');
       }
@@ -112,50 +183,91 @@ export default function AdminAdsPage() {
     }
   };
 
-  // Toggle Ad Active/Paused
+  // Toggle Ad Active/Paused (Fast Optimistic Update)
   const handleToggleAdStatus = async (ad: AdCampaign) => {
+    const nextActive = !ad.isActive;
+    
+    // Instant optimistic update
+    setAds((prev) =>
+      prev.map((a) => (a._id === ad._id ? { ...a, isActive: nextActive } : a))
+    );
+    setAdsStats((prev) => ({
+      ...prev,
+      activeAds: nextActive ? prev.activeAds + 1 : Math.max(0, prev.activeAds - 1),
+      pausedAds: !nextActive ? prev.pausedAds + 1 : Math.max(0, prev.pausedAds - 1),
+    }));
+    toast.success(`Campaign "${ad.title}" ${nextActive ? 'activated' : 'paused'}`);
+
     try {
       const res = await fetch('/api/admin/ads', {
         method: 'PATCH',
         headers: getHeaders(),
-        body: JSON.stringify({ id: ad._id, isActive: !ad.isActive }),
+        body: JSON.stringify({ id: ad._id, isActive: nextActive }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (!res.ok || !data.success) {
+        // Revert on failure
         setAds((prev) =>
-          prev.map((a) => (a._id === ad._id ? { ...a, isActive: !ad.isActive } : a))
+          prev.map((a) => (a._id === ad._id ? { ...a, isActive: ad.isActive } : a))
         );
         setAdsStats((prev) => ({
           ...prev,
-          activeAds: !ad.isActive ? prev.activeAds + 1 : prev.activeAds - 1,
-          pausedAds: !ad.isActive ? prev.pausedAds - 1 : prev.pausedAds + 1,
+          activeAds: ad.isActive ? prev.activeAds + 1 : Math.max(0, prev.activeAds - 1),
+          pausedAds: !ad.isActive ? prev.pausedAds + 1 : Math.max(0, prev.pausedAds - 1),
         }));
-        showNotification('success', `Campaign "${ad.title}" ${!ad.isActive ? 'activated' : 'paused'}`);
-      } else {
-        showNotification('error', data.error || 'Failed to update status');
+        toast.error(data.error || 'Failed to update status');
       }
     } catch (err) {
-      showNotification('error', 'Failed to toggle campaign status');
+      // Revert on error
+      setAds((prev) =>
+        prev.map((a) => (a._id === ad._id ? { ...a, isActive: ad.isActive } : a))
+      );
+      toast.error('Failed to toggle campaign status');
     }
   };
 
-  // Delete Ad
-  const handleDeleteAd = async (adId: string, title: string) => {
-    if (!confirm(`Are you sure you want to permanently delete campaign "${title}"?`)) return;
+  // Confirm and Execute Delete Ad (Fast Optimistic Removal)
+  const confirmDeleteAd = async () => {
+    if (!deleteTarget) return;
+    const { id, title } = deleteTarget;
+    setIsDeleting(true);
+
+    const previousAds = [...ads];
+    const adToDelete = ads.find((a) => a._id === id);
+
+    // Instant optimistic removal from UI
+    setAds((prev) => prev.filter((a) => a._id !== id));
+    if (adToDelete) {
+      setAdsStats((prev) => ({
+        ...prev,
+        totalAds: Math.max(0, prev.totalAds - 1),
+        activeAds: adToDelete.isActive ? Math.max(0, prev.activeAds - 1) : prev.activeAds,
+        pausedAds: !adToDelete.isActive ? Math.max(0, prev.pausedAds - 1) : prev.pausedAds,
+      }));
+    }
+
+    setDeleteTarget(null);
+    setIsDeleting(false);
+    toast.success(`Campaign "${title}" deleted successfully`);
+
     try {
-      const res = await fetch(`/api/admin/ads?id=${adId}`, {
+      const res = await fetch(`/api/admin/ads?id=${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        showNotification('success', 'Campaign deleted successfully');
-        fetchAds();
+      if (!res.ok || !data.success) {
+        // Revert on failure
+        setAds(previousAds);
+        toast.error(data.error || 'Failed to delete campaign');
       } else {
-        showNotification('error', data.error || 'Failed to delete campaign');
+        try {
+          localStorage.setItem(ADS_CACHE_KEY, JSON.stringify(ads.filter((a) => a._id !== id)));
+        } catch {}
       }
     } catch (err) {
-      showNotification('error', 'Error deleting campaign');
+      setAds(previousAds);
+      toast.error('Error deleting campaign');
     }
   };
 
@@ -172,11 +284,13 @@ export default function AdminAdsPage() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          showNotification('success', 'Campaign updated successfully');
+          setAds((prev) =>
+            prev.map((a) => (a._id === editingAd._id ? { ...a, ...adForm, ...(data.ad || {}) } : a))
+          );
           setIsAdModalOpen(false);
-          fetchAds();
+          toast.success('Campaign updated successfully');
         } else {
-          showNotification('error', data.error || 'Failed to update campaign');
+          toast.error(data.error || 'Failed to update campaign');
         }
       } else {
         const res = await fetch('/api/admin/ads', {
@@ -186,15 +300,19 @@ export default function AdminAdsPage() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          showNotification('success', 'New campaign created and activated');
+          if (data.ad) {
+            setAds((prev) => [data.ad, ...prev]);
+          } else {
+            fetchAds();
+          }
           setIsAdModalOpen(false);
-          fetchAds();
+          toast.success('New campaign created and activated');
         } else {
-          showNotification('error', data.error || 'Failed to create campaign');
+          toast.error(data.error || 'Failed to create campaign');
         }
       }
     } catch (err: any) {
-      showNotification('error', err.message || 'Error saving campaign');
+      toast.error(err.message || 'Error saving campaign');
     } finally {
       setSubmitting(false);
     }
@@ -202,6 +320,7 @@ export default function AdminAdsPage() {
 
   const openCreateAdModal = () => {
     setEditingAd(null);
+    setBannerPreview('');
     setAdForm({
       title: '',
       description: '',
@@ -218,6 +337,7 @@ export default function AdminAdsPage() {
 
   const openEditAdModal = (ad: AdCampaign) => {
     setEditingAd(ad);
+    setBannerPreview(ad.imageUrl || '');
     setAdForm({
       title: ad.title,
       description: ad.description,
@@ -231,6 +351,8 @@ export default function AdminAdsPage() {
     });
     setIsAdModalOpen(true);
   };
+
+  const [page, setPage] = useState(1);
 
   // Filtered ads
   const filteredAds = useMemo(() => {
@@ -252,6 +374,12 @@ export default function AdminAdsPage() {
       return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [ads, searchQuery, selectedCategory, statusFilter]);
+
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredAds.length / pageSize));
+  const paginatedAds = useMemo(() => {
+    return filteredAds.slice((page - 1) * pageSize, page * pageSize);
+  }, [filteredAds, page]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -276,19 +404,11 @@ export default function AdminAdsPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Layers size={20} />
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Sponsored Ad Campaigns
-            </h1>
-            <span className="px-2.5 py-0.5 text-[11px] font-extrabold rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              Live Serving
-            </span>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Ads
+          </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            Publish sponsored ads, review real-time impressions, track click-through rates, and govern banner campaigns.
+            Publish sponsored ads, review real-time impressions, track click-through rates, and govern banner campaigns
           </p>
         </div>
 
@@ -311,104 +431,29 @@ export default function AdminAdsPage() {
         </div>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total & Active Campaigns */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Campaigns</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Layers size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {adsStats.activeAds}
-            </span>
-            <span className="text-xs text-slate-400 font-semibold">/ {adsStats.totalAds} Total</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-            <span>{adsStats.pausedAds} paused</span>
-          </div>
-        </div>
-
-        {/* Card 2: Total Impressions */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Impressions</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Eye size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {adsStats.totalImpressions.toLocaleString()}
-            </span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Across active consumer feeds
-          </div>
-        </div>
-
-        {/* Card 3: Total Clicks */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Verified Clicks</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <MousePointerClick size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {adsStats.totalClicks.toLocaleString()}
-            </span>
-          </div>
-          <div className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-            <TrendingUp size={12} />
-            <span>Target engagement</span>
-          </div>
-        </div>
-
-        {/* Card 4: Average CTR */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Average CTR</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <BarChart3 size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
-              {adsStats.avgCtr}
-            </span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Ratio of clicks per impression
-          </div>
-        </div>
-      </div>
-
       {/* Filter & Search Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Search input */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      <div className="p-4 bg-white dark:bg-[#111a2e] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search input on Left */}
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search campaign, advertiser..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition font-medium"
           />
         </div>
 
-        {/* Category & Status Filters */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        {/* Category & Status Filters on Right */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Status buttons */}
           <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold">
             <button
-              onClick={() => setStatusFilter('all')}
+              onClick={() => { setStatusFilter('all'); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 statusFilter === 'all'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
@@ -418,7 +463,7 @@ export default function AdminAdsPage() {
               All ({ads.length})
             </button>
             <button
-              onClick={() => setStatusFilter('active')}
+              onClick={() => { setStatusFilter('active'); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 statusFilter === 'active'
                   ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
@@ -428,7 +473,7 @@ export default function AdminAdsPage() {
               Active ({adsStats.activeAds})
             </button>
             <button
-              onClick={() => setStatusFilter('paused')}
+              onClick={() => { setStatusFilter('paused'); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 statusFilter === 'paused'
                   ? 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-xs'
@@ -442,8 +487,8 @@ export default function AdminAdsPage() {
           {/* Category dropdown */}
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
+            className="px-3.5 py-2 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 shadow-xs transition cursor-pointer"
           >
             {CATEGORIES.map((cat) => (
               <option key={cat} value={cat}>
@@ -454,162 +499,185 @@ export default function AdminAdsPage() {
         </div>
       </div>
 
-      {/* Campaigns Listing */}
-      {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center text-slate-400 text-sm">
-          <RefreshCw size={24} className="animate-spin text-blue-500 mb-3" />
-          <span>Loading ad campaigns...</span>
-        </div>
-      ) : filteredAds.length === 0 ? (
-        <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8">
-          <Layers size={40} className="mx-auto text-slate-400 mb-3" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">No campaigns found</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-            {searchQuery || selectedCategory !== 'All' || statusFilter !== 'all'
-              ? 'Try adjusting your filters or search query.'
-              : 'Create your first sponsored ad campaign to start serving banners in Novix Messenger.'}
-          </p>
-          <button
-            onClick={openCreateAdModal}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition"
-          >
-            <Plus size={14} />
-            <span>Create Campaign</span>
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredAds.map((ad) => {
-            const ctr = ad.impressions > 0 ? ((ad.clicks / ad.impressions) * 100).toFixed(2) : '0.00';
-
-            return (
-              <div
-                key={ad._id}
-                className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col"
-              >
-                {/* Banner Thumbnail Preview */}
-                <div className="relative h-40 bg-slate-100 dark:bg-slate-850 overflow-hidden group border-b border-slate-100 dark:border-slate-800">
-                  {ad.imageUrl ? (
-                    <img
-                      src={ad.imageUrl}
-                      alt={ad.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-850">
-                      <Layers size={28} className="opacity-40" />
-                      <span className="text-[11px] font-medium">No Banner Image</span>
-                    </div>
-                  )}
-
-                  {/* Category Pill */}
-                  <span className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-black/60 backdrop-blur-md text-white border border-white/20">
-                    {ad.category || 'General'}
-                  </span>
-
-                  {/* Live Status Toggle Pill */}
-                  <button
-                    onClick={() => handleToggleAdStatus(ad)}
-                    className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold backdrop-blur-md transition flex items-center gap-1.5 cursor-pointer border ${
-                      ad.isActive
-                        ? 'bg-emerald-500/90 text-white border-emerald-400'
-                        : 'bg-slate-800/80 text-slate-300 border-slate-700'
-                    }`}
-                    title={ad.isActive ? 'Click to Pause' : 'Click to Activate'}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${ad.isActive ? 'bg-white' : 'bg-slate-400'}`} />
-                    <span>{ad.isActive ? 'Active' : 'Paused'}</span>
-                  </button>
-                </div>
-
-                {/* Campaign Body */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                  <div>
-                    {/* Advertiser Header */}
-                    <div className="flex items-center gap-2 mb-1.5">
-                      {ad.advertiserLogo ? (
-                        <img
-                          src={ad.advertiserLogo}
-                          alt={ad.advertiser}
-                          className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-                        />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">
-                          {ad.advertiser[0]?.toUpperCase() || 'A'}
+      {/* Campaigns Table Container */}
+      <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-2xl shadow-xs overflow-hidden">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[760px]">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/50 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                <th className="py-3.5 px-5">Campaign / Banner</th>
+                <th className="py-3.5 px-5">Advertiser</th>
+                <th className="py-3.5 px-5">Category</th>
+                <th className="py-3.5 px-5">Performance (Imp / Clicks / CTR)</th>
+                <th className="py-3.5 px-5">Status</th>
+                <th className="py-3.5 px-5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 text-xs">
+              {loading && ads.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                    <RefreshCw size={24} className="animate-spin text-blue-500 mx-auto mb-2" />
+                    <span>Loading ad campaigns...</span>
+                  </td>
+                </tr>
+              ) : filteredAds.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                    <Layers size={36} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                    <p className="font-bold text-slate-700 dark:text-slate-300">No campaigns found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your filters or search query</p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedAds.map((ad) => {
+                  const ctr = ad.impressions > 0 ? ((ad.clicks / ad.impressions) * 100).toFixed(2) : '0.00';
+                  return (
+                    <tr key={ad._id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition duration-150">
+                      {/* Campaign info */}
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
+                            {ad.imageUrl ? (
+                              <img src={ad.imageUrl} alt={ad.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                <Layers size={16} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 max-w-[220px]">
+                            <div className="font-bold text-slate-900 dark:text-white truncate" title={ad.title}>
+                              {ad.title}
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate" title={ad.description}>
+                              {ad.description || 'No description'}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
-                        {ad.advertiser}
-                      </span>
-                    </div>
+                      </td>
 
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white line-clamp-1">
-                      {ad.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                      {ad.description}
-                    </p>
-                  </div>
+                      {/* Advertiser */}
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-2">
+                          {ad.advertiserLogo ? (
+                            <img src={ad.advertiserLogo} alt={ad.advertiser} className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">
+                              {ad.advertiser?.[0]?.toUpperCase() || 'A'}
+                            </div>
+                          )}
+                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
+                            {ad.advertiser}
+                          </span>
+                        </div>
+                      </td>
 
-                  {/* Telemetry Stats Strip */}
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850/80 border border-slate-200/60 dark:border-slate-800/80 grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Impressions</div>
-                      <div className="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums mt-0.5">
-                        {ad.impressions.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Clicks</div>
-                      <div className="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums mt-0.5">
-                        {ad.clicks.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">CTR</div>
-                      <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5">
-                        {ctr}%
-                      </div>
-                    </div>
-                  </div>
+                      {/* Category */}
+                      <td className="py-3.5 px-5 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
+                          {ad.category || 'General'}
+                        </span>
+                      </td>
 
-                  {/* Target Link & Actions */}
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                    <a
-                      href={ad.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold truncate max-w-[150px]"
-                      title={ad.url}
-                    >
-                      <Globe size={12} className="shrink-0" />
-                      <span className="truncate">{ad.url.replace(/^https?:\/\//, '')}</span>
-                      <ExternalLink size={10} className="shrink-0" />
-                    </a>
+                      {/* Telemetry */}
+                      <td className="py-3.5 px-5 whitespace-nowrap">
+                        <div className="flex items-center gap-3 text-xs">
+                          <div>
+                            <span className="text-slate-400 text-[10px] block">Impr:</span>
+                            <span className="font-bold tabular-nums text-slate-900 dark:text-white">{ad.impressions.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[10px] block">Clicks:</span>
+                            <span className="font-bold tabular-nums text-slate-900 dark:text-white">{ad.clicks.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[10px] block">CTR:</span>
+                            <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{ctr}%</span>
+                          </div>
+                        </div>
+                      </td>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => openEditAdModal(ad)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                        title="Edit campaign"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAd(ad._id, ad.title)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                        title="Delete campaign"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                      {/* Status */}
+                      <td className="py-3.5 px-5 whitespace-nowrap">
+                        <button
+                          onClick={() => handleToggleAdStatus(ad)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                            ad.isActive
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                          }`}
+                          title={ad.isActive ? 'Click to Pause' : 'Click to Activate'}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${ad.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          <span>{ad.isActive ? 'Active' : 'Paused'}</span>
+                        </button>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <a
+                            href={ad.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition"
+                            title="Visit destination link"
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                          <button
+                            onClick={() => openEditAdModal(ad)}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
+                            title="Edit campaign"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ id: ad._id, title: ad.title })}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                            title="Delete campaign"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        {/* Unified Pagination Bar */}
+        <div className="p-4 bg-slate-50/70 dark:bg-slate-850/50 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing <strong className="text-slate-700 dark:text-slate-200">{filteredAds.length}</strong> campaigns • Page <strong className="text-slate-700 dark:text-slate-200">{page}</strong> of <strong className="text-slate-700 dark:text-slate-200">{totalPages}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
+            >
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Previous</span>
+            </button>
+            <span className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+              {page}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Create / Edit Campaign Modal */}
       {isAdModalOpen && (
@@ -688,19 +756,78 @@ export default function AdminAdsPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Banner Image URL */}
-                <div>
+                {/* Banner Image Upload */}
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                    Banner Image URL
+                    Banner Image
                   </label>
+                  {/* Hidden file input */}
                   <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={adForm.imageUrl}
-                    onChange={(e) => setAdForm({ ...adForm, imageUrl: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadBannerImage(file);
+                      e.target.value = '';
+                    }}
                   />
+                  {/* Drop zone */}
+                  <div
+                    onClick={() => bannerInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) uploadBannerImage(file);
+                    }}
+                    className="relative w-full h-36 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 transition cursor-pointer overflow-hidden flex items-center justify-center group"
+                  >
+                    {uploadingBanner ? (
+                      <div className="flex flex-col items-center gap-2 text-blue-500">
+                        <RefreshCw size={22} className="animate-spin" />
+                        <span className="text-xs font-semibold">Uploading...</span>
+                      </div>
+                    ) : bannerPreview ? (
+                      <>
+                        <img
+                          src={bannerPreview}
+                          alt="Banner preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                          <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                            <RefreshCw size={14} /> Change Image
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5 text-slate-400 dark:text-slate-500 px-4 text-center">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-0.5">
+                          <TrendingUp size={20} className="text-slate-400" />
+                        </div>
+                        <span className="text-xs font-semibold">Click or drag &amp; drop to upload</span>
+                        <span className="text-[10px] text-slate-400">JPG, PNG, WebP, GIF — max 10MB</span>
+                      </div>
+                    )}
+                  </div>
+                  {adForm.imageUrl && (
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 truncate max-w-[220px]" title={adForm.imageUrl}>
+                        ✓ {adForm.imageUrl.split('/').pop()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setAdForm((p) => ({ ...p, imageUrl: '' })); setBannerPreview(''); }}
+                        className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
+
 
                 {/* Advertiser Logo URL */}
                 <div>
@@ -858,6 +985,18 @@ export default function AdminAdsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Campaign Confirmation Modal Popup */}
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Ad Campaign"
+        itemName={deleteTarget?.title}
+        description={`Are you sure you want to permanently delete campaign "${deleteTarget?.title}"? All impressions and click metrics will be removed.`}
+        confirmLabel="Delete Campaign"
+        isLoading={isDeleting}
+        onConfirm={confirmDeleteAd}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

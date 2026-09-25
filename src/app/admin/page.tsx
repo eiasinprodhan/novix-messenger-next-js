@@ -36,30 +36,57 @@ interface Stats {
   totalReports: number;
   pendingReports: number;
   resolvedReports: number;
+  totalAds: number;
+  activeAds: number;
 }
 
+const DASHBOARD_CACHE_KEY = 'novix_admin_dashboard_cache';
+
+const DEFAULT_STATS: Stats = {
+  totalUsers: 0,
+  onlineUsers: 0,
+  verifiedUsers: 0,
+  adminCount: 0,
+  totalMessages: 0,
+  totalFriendships: 0,
+  pendingFriendRequests: 0,
+  totalGroups: 0,
+  totalStories: 0,
+  totalReports: 0,
+  pendingReports: 0,
+  resolvedReports: 0,
+  totalAds: 0,
+  activeAds: 0,
+};
+
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    onlineUsers: 0,
-    verifiedUsers: 0,
-    adminCount: 0,
-    totalMessages: 0,
-    totalFriendships: 0,
-    pendingFriendRequests: 0,
-    totalGroups: 0,
-    totalStories: 0,
-    totalReports: 0,
-    pendingReports: 0,
-    resolvedReports: 0,
-  });
+  const [stats, setStats] = useState<Stats>(DEFAULT_STATS);
   const [messageTrends, setMessageTrends] = useState<TrendPoint[]>([]);
   const [userTrends, setUserTrends] = useState<TrendPoint[]>([]);
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [recentReports, setRecentReports] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [hasData, setHasData] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Restore cached dashboard post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached?.stats) {
+          setStats(cached.stats);
+          if (cached.messageTrends) setMessageTrends(cached.messageTrends);
+          if (cached.userTrends) setUserTrends(cached.userTrends);
+          if (cached.recentUsers) setRecentUsers(cached.recentUsers);
+          if (cached.recentLogs) setRecentLogs(cached.recentLogs);
+          if (cached.recentReports) setRecentReports(cached.recentReports);
+          setHasData(true);
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -67,7 +94,6 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
 
     try {
       const token = localStorage.getItem('adminToken');
@@ -83,11 +109,22 @@ export default function AdminDashboard() {
         if (data.recentUsers) setRecentUsers(data.recentUsers);
         if (data.recentLogs) setRecentLogs(data.recentLogs);
         if (data.recentReports) setRecentReports(data.recentReports);
+        setHasData(true);
+
+        try {
+          localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({
+            stats: data.stats,
+            messageTrends: data.messageTrends,
+            userTrends: data.userTrends,
+            recentUsers: data.recentUsers,
+            recentLogs: data.recentLogs,
+            recentReports: data.recentReports,
+          }));
+        } catch {}
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data', error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -101,12 +138,12 @@ export default function AdminDashboard() {
     : 0;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Banner & Refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            System Overview & Telemetry
+            Dashboard
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
             Live telemetry, real-time activity, and moderation management for Novix Messenger
@@ -125,7 +162,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Top Telemetry Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         {/* Card 1: Registered Users */}
         <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 p-6 rounded-2xl shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 dark:bg-blue-500/15 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
@@ -134,20 +171,30 @@ export default function AdminDashboard() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                 Total Users
               </p>
-              <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
-                {stats.totalUsers.toLocaleString()}
-              </p>
+              {!hasData ? (
+                <div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse mt-2" />
+              ) : (
+                <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
+                  {stats.totalUsers.toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40 rounded-xl shrink-0">
               <Users size={22} />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800/60">
-            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 size={13} />
-              {stats.verifiedUsers} Verified
-            </span>
-            <span className="text-blue-600 dark:text-blue-400 font-bold">{stats.adminCount} Admins</span>
+            {!hasData ? (
+              <div className="h-3.5 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={13} />
+                  {stats.verifiedUsers} Verified
+                </span>
+                <span className="text-blue-600 dark:text-blue-400 font-bold">{stats.adminCount} Admins</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -159,21 +206,31 @@ export default function AdminDashboard() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                 Active Online
               </p>
-              <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white flex items-center gap-2">
-                <span>{stats.onlineUsers.toLocaleString()}</span>
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
-              </p>
+              {!hasData ? (
+                <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse mt-2" />
+              ) : (
+                <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{stats.onlineUsers.toLocaleString()}</span>
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  </span>
+                </p>
+              )}
             </div>
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40 rounded-xl shrink-0">
               <UserCheck size={22} />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800/60">
-            <span>{onlinePct}% of total network</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Real-time Sockets</span>
+            {!hasData ? (
+              <div className="h-3.5 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <>
+                <span>{onlinePct}% of total network</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">Real-time Sockets</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -185,17 +242,27 @@ export default function AdminDashboard() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                 Total Messages
               </p>
-              <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
-                {stats.totalMessages.toLocaleString()}
-              </p>
+              {!hasData ? (
+                <div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse mt-2" />
+              ) : (
+                <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
+                  {stats.totalMessages.toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 rounded-xl shrink-0">
               <MessageCircle size={22} />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800/60">
-            <span>{stats.totalGroups} Groups</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold">{stats.totalStories} Stories</span>
+            {!hasData ? (
+              <div className="h-3.5 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <>
+                <span>{stats.totalGroups} Groups</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{stats.totalStories} Stories</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -207,19 +274,63 @@ export default function AdminDashboard() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                 Pending Reports
               </p>
-              <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
-                {stats.pendingReports}
-              </p>
+              {!hasData ? (
+                <div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse mt-2" />
+              ) : (
+                <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
+                  {stats.pendingReports}
+                </p>
+              )}
             </div>
             <div className="p-3 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40 rounded-xl shrink-0">
               <Flag size={22} />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800/60">
-            <span className="text-emerald-600 dark:text-emerald-400">{stats.resolvedReports} Resolved</span>
-            <Link href="/admin/reports" className="text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-bold">
-              Review Queue <ArrowRight size={12} />
-            </Link>
+            {!hasData ? (
+              <div className="h-3.5 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <>
+                <span className="text-emerald-600 dark:text-emerald-400">{stats.resolvedReports} Resolved</span>
+                <Link href="/admin/reports" className="text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-bold">
+                  Review Queue <ArrowRight size={12} />
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Card 5: Ad Campaigns */}
+        <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 p-6 rounded-2xl shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 dark:bg-purple-500/15 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div className="flex items-start justify-between relative z-10">
+            <div>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                Ad Campaigns
+              </p>
+              {!hasData ? (
+                <div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse mt-2" />
+              ) : (
+                <p className="text-3xl font-black mt-2 tabular-nums text-slate-900 dark:text-white">
+                  {stats.totalAds}
+                </p>
+              )}
+            </div>
+            <div className="p-3 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/40 rounded-xl shrink-0">
+              <Layers size={22} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+            {!hasData ? (
+              <div className="h-3.5 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <>
+                <span className="text-emerald-600 dark:text-emerald-400">{stats.activeAds} Active</span>
+                <Link href="/admin/ads" className="text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-bold">
+                  Manage Ads <ArrowRight size={12} />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -235,17 +346,27 @@ export default function AdminDashboard() {
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Account Verification Ratio
             </span>
-            <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">{verificationPct}%</span>
+            {!hasData ? (
+              <div className="h-4 w-10 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">{verificationPct}%</span>
+            )}
           </div>
           <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full transition-all duration-500" 
-              style={{ width: `${verificationPct}%` }}
+              style={{ width: !hasData ? '0%' : `${verificationPct}%` }}
             />
           </div>
           <div className="mt-3 flex justify-between text-[11px] text-slate-400 font-medium">
-            <span>{stats.verifiedUsers} Verified</span>
-            <span>{stats.totalUsers - stats.verifiedUsers} Unverified</span>
+            {!hasData ? (
+              <div className="h-3 w-40 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mt-1" />
+            ) : (
+              <>
+                <span>{stats.verifiedUsers} Verified</span>
+                <span>{stats.totalUsers - stats.verifiedUsers} Unverified</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -255,17 +376,27 @@ export default function AdminDashboard() {
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Network Concurrency
             </span>
-            <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{onlinePct}%</span>
+            {!hasData ? (
+              <div className="h-4 w-10 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{onlinePct}%</span>
+            )}
           </div>
           <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500" 
-              style={{ width: `${onlinePct}%` }}
+              style={{ width: !hasData ? '0%' : `${onlinePct}%` }}
             />
           </div>
           <div className="mt-3 flex justify-between text-[11px] text-slate-400 font-medium">
-            <span>{stats.onlineUsers} Online Now</span>
-            <span>{stats.totalUsers - stats.onlineUsers} Offline</span>
+            {!hasData ? (
+              <div className="h-3 w-40 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mt-1" />
+            ) : (
+              <>
+                <span>{stats.onlineUsers} Online Now</span>
+                <span>{stats.totalUsers - stats.onlineUsers} Offline</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -275,17 +406,27 @@ export default function AdminDashboard() {
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Friendships & Connections
             </span>
-            <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">{stats.totalFriendships}</span>
+            {!hasData ? (
+              <div className="h-4 w-10 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            ) : (
+              <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">{stats.totalFriendships}</span>
+            )}
           </div>
           <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" 
-              style={{ width: '75%' }}
+              style={{ width: !hasData ? '0%' : '75%' }}
             />
           </div>
           <div className="mt-3 flex justify-between text-[11px] text-slate-400 font-medium">
-            <span>{stats.totalFriendships} Active Bonds</span>
-            <span>{stats.pendingFriendRequests} Pending Requests</span>
+            {!hasData ? (
+              <div className="h-3 w-40 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mt-1" />
+            ) : (
+              <>
+                <span>{stats.totalFriendships} Active Bonds</span>
+                <span>{stats.pendingFriendRequests} Pending Requests</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -314,7 +455,7 @@ export default function AdminDashboard() {
             href="/admin/reports"
             className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition"
           >
-            Review Reports ({stats.pendingReports})
+            Review Reports {!hasData ? '' : `(${stats.pendingReports})`}
           </Link>
         </div>
       </div>
@@ -350,7 +491,30 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {recentUsers.length === 0 ? (
+                {!hasData ? (
+                  [1, 2, 3, 4].map((i) => (
+                    <tr key={i}>
+                      <td className="py-3 pr-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse shrink-0" />
+                          <div className="space-y-1">
+                            <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                            <div className="h-2.5 w-16 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 pr-2">
+                        <div className="h-4 w-12 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse" />
+                      </td>
+                      <td className="py-3 pr-2">
+                        <div className="h-3 w-14 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="h-3 w-12 bg-slate-200 dark:bg-slate-800 rounded animate-pulse ml-auto" />
+                      </td>
+                    </tr>
+                  ))
+                ) : recentUsers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-slate-400">
                       No user accounts found.
@@ -421,7 +585,20 @@ export default function AdminDashboard() {
           </div>
 
           <div className="space-y-3">
-            {recentLogs.length === 0 ? (
+            {!hasData ? (
+              [1, 2, 3, 4].map((i) => (
+                <div 
+                  key={i}
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60 animate-pulse"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-5 w-16 bg-slate-200 dark:bg-slate-800 rounded" />
+                    <div className="h-3.5 w-44 bg-slate-200 dark:bg-slate-800 rounded" />
+                  </div>
+                  <div className="h-3 w-12 bg-slate-200 dark:bg-slate-800 rounded" />
+                </div>
+              ))
+            ) : recentLogs.length === 0 ? (
               <div className="py-8 text-center text-slate-400 text-xs">
                 No recent security activity logged.
               </div>

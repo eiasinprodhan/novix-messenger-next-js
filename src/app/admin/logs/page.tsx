@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FileText, Clock, ShieldCheck, ChevronLeft, ChevronRight, User, Terminal, Download } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FileText, Clock, ChevronLeft, ChevronRight, Download, Search, RefreshCw, Filter } from 'lucide-react';
 
 interface Log {
   _id: string;
@@ -13,14 +13,34 @@ interface Log {
   createdAt: string;
 }
 
+const LOGS_CACHE_KEY = 'novix_admin_logs_cache';
+
 export default function AdminLogs() {
   const [logs, setLogs] = useState<Log[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [eventFilter, setEventFilter] = useState('all');
 
-  const fetchLogs = async (currentPage = 1) => {
-    setLoading(true);
+  // Restore cached logs post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOGS_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setLogs(cached);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const fetchLogs = async (currentPage = 1, isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else if (logs.length === 0) setLoading(true);
+
     try {
       const token = localStorage.getItem('adminToken');
       const res = await fetch(`/api/admin/logs?page=${currentPage}&limit=15`, {
@@ -31,11 +51,17 @@ export default function AdminLogs() {
       if (res.ok && data.logs) {
         setLogs(data.logs);
         setTotalPages(data.pagination?.pages || 1);
+        if (currentPage === 1) {
+          try {
+            localStorage.setItem(LOGS_CACHE_KEY, JSON.stringify(data.logs));
+          } catch {}
+        }
       }
     } catch (err) {
       console.error('Failed to fetch logs', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -70,32 +96,94 @@ export default function AdminLogs() {
     fetchLogs(page);
   }, [page]);
 
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        log.admin?.name?.toLowerCase().includes(q) ||
+        log.admin?.username?.toLowerCase().includes(q) ||
+        log.action?.toLowerCase().includes(q) ||
+        log.targetType?.toLowerCase().includes(q) ||
+        (typeof log.details === 'object' && JSON.stringify(log.details).toLowerCase().includes(q));
+
+      const matchesFilter =
+        eventFilter === 'all' ||
+        (eventFilter === 'auth' && (log.action.includes('AUTH') || log.action.includes('LOGIN'))) ||
+        (eventFilter === 'mod' && (log.action.includes('BAN') || log.action.includes('RESOLVE') || log.action.includes('UPDATE'))) ||
+        (eventFilter === 'deletion' && (log.action.includes('DELETE') || log.action.includes('REMOVE')));
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [logs, searchQuery, eventFilter]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            System Audit & Security Logs
+            Logs
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
             Immutable audit trail of administrative activities, user modifications & security events
           </p>
         </div>
-        <button
-          onClick={exportLogsCSV}
-          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs sm:text-sm font-semibold flex items-center gap-2 px-3.5 py-2.5 rounded-xl transition shadow-xs cursor-pointer"
-          title="Export current audit logs as CSV"
-        >
-          <Download size={16} />
-          <span>Export Logs CSV</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => fetchLogs(page, true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3.5 py-2.5 text-slate-600 dark:text-slate-300 bg-white dark:bg-[#111a2e] border border-slate-200 dark:border-slate-800 rounded-xl hover:shadow-xs transition text-xs font-bold cursor-pointer"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin text-blue-600' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Logs'}</span>
+          </button>
+          <button
+            onClick={exportLogsCSV}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs sm:text-sm font-semibold flex items-center gap-2 px-3.5 py-2.5 rounded-xl transition shadow-xs cursor-pointer"
+            title="Export current audit logs as CSV"
+          >
+            <Download size={16} />
+            <span>Export CSV</span>
+          </button>
+        </div>
       </div>
 
+      {/* Unified Search & Filter Bar */}
+      <div className="p-4 bg-white dark:bg-[#111a2e] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search Input on Left */}
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search audit logs by admin, event, target..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition font-medium"
+          />
+        </div>
+
+        {/* Filter Dropdown on Right */}
+        <div className="flex items-center gap-2">
+          <select
+            value={eventFilter}
+            onChange={(e) => setEventFilter(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:border-blue-500 shadow-xs transition cursor-pointer"
+          >
+            <option value="all">All Event Types</option>
+            <option value="auth">Auth & Security</option>
+            <option value="mod">Mod Actions</option>
+            <option value="deletion">Deletions & Bans</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Audit Logs Table Container */}
       <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[720px]">
-            <thead className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
-              <tr>
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/50 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                 <th className="py-3.5 px-5">Timestamp</th>
                 <th className="py-3.5 px-5">Administrator</th>
                 <th className="py-3.5 px-5">Action Event</th>
@@ -103,24 +191,24 @@ export default function AdminLogs() {
                 <th className="py-3.5 px-5">Details & Payload</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
-              {loading ? (
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 text-xs">
+              {loading && logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-16 text-center text-slate-400 font-medium">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span>Fetching audit logs...</span>
-                    </div>
+                    <RefreshCw size={24} className="animate-spin text-blue-500 mx-auto mb-2" />
+                    <span>Fetching audit logs...</span>
                   </td>
                 </tr>
-              ) : logs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-16 text-center text-slate-400 font-medium">
-                    No system audit logs recorded yet.
+                    <FileText size={36} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                    <p className="font-bold text-slate-700 dark:text-slate-300">No audit logs found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search query or event filter</p>
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => {
+                filteredLogs.map((log) => {
                   const actionLabel = log.action.replace(/_/g, ' ');
                   const isDanger = log.action.includes('DELETED') || log.action.includes('BANNED') || log.action.includes('REMOVED');
                   const isSuccess = log.action.includes('CREATED') || log.action.includes('RESOLVED');
@@ -190,28 +278,33 @@ export default function AdminLogs() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Page {page} of {totalPages}</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page <= 1}
-                className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40 transition cursor-pointer"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page >= totalPages}
-                className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40 transition cursor-pointer"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
+        {/* Unified Pagination Bar */}
+        <div className="p-4 bg-slate-50/70 dark:bg-slate-850/50 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing <strong className="text-slate-700 dark:text-slate-200">{filteredLogs.length}</strong> logs • Page <strong className="text-slate-700 dark:text-slate-200">{page}</strong> of <strong className="text-slate-700 dark:text-slate-200">{totalPages}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
+            >
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Previous</span>
+            </button>
+            <span className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+              {page}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight size={14} />
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

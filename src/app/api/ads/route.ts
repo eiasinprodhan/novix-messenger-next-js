@@ -4,102 +4,19 @@ import User from '@/models/User';
 import Ad from '@/models/Ad';
 import { getUserFromRequest } from '@/lib/auth';
 
-const DEFAULT_SEEDED_ADS = [
-  {
-    title: 'Promote Your Business Online - Grow with Google Ads',
-    description: 'Get in front of customers when they are searching for businesses like yours on Google Search and Maps. Start today with $500 in ad credit.',
-    advertiser: 'Google Ads',
-    advertiserLogo: 'https://www.gstatic.com/images/branding/product/2x/google_ads_48dp.png',
-    imageUrl: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=800&q=80',
-    ctaText: 'Sign up',
-    url: 'https://ads.google.com',
-    category: 'Marketing',
-    isActive: true,
-  },
-  {
-    title: 'Reach More Customers on Facebook & Instagram',
-    description: 'Connect with people where they spend their time. Create targeted campaigns with powerful audience insights.',
-    advertiser: 'Meta for Business',
-    advertiserLogo: 'https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg',
-    imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80',
-    ctaText: 'Learn More',
-    url: 'https://facebook.com/business',
-    category: 'Social Media',
-    isActive: true,
-  },
-  {
-    title: 'Supercharge Your Chats with Next-Gen Novix AI',
-    description: 'Instant multi-language translation, smart voice transcription, and team automations built right into your Novix Messenger chats.',
-    advertiser: 'Novix Cloud & AI',
-    advertiserLogo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&q=80',
-    imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&q=80',
-    ctaText: 'Explore AI',
-    url: 'https://novix.me',
-    category: 'Technology',
-    isActive: true,
-  },
-  {
-    title: 'Turn Your Ideas into a Global Online Store',
-    description: 'Build your brand, sell to anyone around the world, and accept payments with zero hassle on Shopify.',
-    advertiser: 'Shopify Global',
-    advertiserLogo: 'https://upload.wikimedia.org/wikipedia/commons/0/0e/Shopify_logo_2018.svg',
-    imageUrl: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=800&q=80',
-    ctaText: 'Start Free Trial',
-    url: 'https://www.shopify.com',
-    category: 'E-Commerce',
-    isActive: true,
-  },
-];
-
-const DEFAULT_ADVERTISERS = [
-  {
-    name: 'Google Ads',
-    category: 'Search & Display Advertising',
-    initials: 'G',
-    colorHex: '#4285F4',
-    website: 'https://ads.google.com',
-  },
-  {
-    name: 'Meta for Business',
-    category: 'Social Media Marketing',
-    initials: 'M',
-    colorHex: '#0866FF',
-    website: 'https://facebook.com/business',
-  },
-  {
-    name: 'Novix Cloud & AI',
-    category: 'Artificial Intelligence & Productivity',
-    initials: 'NX',
-    colorHex: '#8E52EA',
-    website: 'https://novix.me',
-  },
-  {
-    name: 'Shopify Global',
-    category: 'E-Commerce & Retail Solutions',
-    initials: 'S',
-    colorHex: '#00B894',
-    website: 'https://www.shopify.com',
-  },
-];
-
-// Helper to seed ads if collection is empty
-async function ensureAdsSeeded() {
-  const count = await Ad.countDocuments();
-  if (count === 0) {
-    await Ad.insertMany(DEFAULT_SEEDED_ADS);
-  }
-}
-
 // GET /api/ads
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await ensureAdsSeeded();
 
     const payload = getUserFromRequest(request);
 
     let savedAds: any[] = [];
     let hiddenAdvertisers: string[] = [];
+    let myAds: any[] = [];
+    let isUserPremium = false;
+    let userCountry = '';
+    let userGender = '';
     let adPreferences = {
       partnerActivity: false,
       audienceBased: false,
@@ -108,8 +25,11 @@ export async function GET(request: NextRequest) {
     };
 
     if (payload?.userId) {
-      const user = await User.findById(payload.userId).select('savedAds hiddenAdvertisers isPremium adPreferences');
+      const user = await User.findById(payload.userId).select('savedAds hiddenAdvertisers isPremium adPreferences country gender');
       if (user) {
+        isUserPremium = !!user.isPremium;
+        userCountry = (user.country || '').trim();
+        userGender = (user.gender || '').trim();
         if (user.adPreferences) {
           adPreferences = {
             partnerActivity: !!user.adPreferences.partnerActivity,
@@ -120,23 +40,57 @@ export async function GET(request: NextRequest) {
         }
         savedAds = user.savedAds || [];
         hiddenAdvertisers = user.hiddenAdvertisers || [];
-
-        // If user has Premium, they have no ads!
-        if (user.isPremium) {
-          return NextResponse.json({
-            isPremiumNoAds: true,
-            ads: [],
-            allAds: [],
-            advertisers: DEFAULT_ADVERTISERS,
-            savedAds,
-            hiddenAdvertisers,
-            adPreferences,
-          });
-        }
       }
+
+      // Fetch user's created ads
+      const userAds = await Ad.find({ creatorId: payload.userId }).sort({ createdAt: -1 });
+      const now = new Date();
+      myAds = userAds.map((ad) => {
+        let currentStatus = ad.status || (ad.isActive ? 'active' : 'draft');
+        if (ad.activeUntil && new Date(ad.activeUntil) < now && currentStatus === 'active') {
+          currentStatus = 'expired';
+        }
+        return {
+          id: ad._id.toString(),
+          title: ad.title,
+          description: ad.description,
+          advertiser: ad.advertiser,
+          advertiserLogo: ad.advertiserLogo || '',
+          imageUrl: ad.imageUrl || '',
+          ctaText: ad.ctaText || 'Learn More',
+          url: ad.url,
+          category: ad.category || 'General',
+          isActive: ad.isActive && (ad.activeUntil ? new Date(ad.activeUntil) > now : true),
+          status: currentStatus,
+          dailyRate: ad.dailyRate || 1,
+          subscribedDays: ad.subscribedDays || 0,
+          activeUntil: ad.activeUntil ? ad.activeUntil.toISOString() : null,
+          adType: ad.adType || 'website',
+          targetCountryType: ad.targetCountryType || 'all',
+          targetCountries: ad.targetCountries || [],
+          targetGender: ad.targetGender || 'all',
+          impressions: ad.impressions || 0,
+          clicks: ad.clicks || 0,
+          createdAt: ad.createdAt,
+        };
+      });
     }
 
-    const allDbAds = await Ad.find({ isActive: true }).sort({ createdAt: -1 });
+    // Active ads pool for sponsored messages
+    // Includes both user-created (subscribed/active) ads AND admin-created ads (no creatorId)
+    const now = new Date();
+    const allDbAds = await Ad.find({
+      isActive: true,
+      status: 'active',
+      $or: [
+        // User-created ads: must have a valid activeUntil in the future
+        { creatorId: { $exists: true, $ne: null }, activeUntil: { $gt: now } },
+        // Admin-created ads: no expiry constraint (they run indefinitely until paused)
+        { creatorId: { $exists: false } },
+        { creatorId: null },
+      ],
+    }).sort({ createdAt: -1 });
+
     const formattedAds = allDbAds.map((ad) => ({
       id: ad._id.toString(),
       advertiser: ad.advertiser,
@@ -147,36 +101,65 @@ export async function GET(request: NextRequest) {
       ctaText: ad.ctaText || 'Learn More',
       url: ad.url,
       category: ad.category || 'General',
+      adType: ad.adType || 'website',
+      targetCountryType: ad.targetCountryType || 'all',
+      targetCountries: ad.targetCountries || [],
+      targetGender: ad.targetGender || 'all',
       impressions: ad.impressions || 0,
       clicks: ad.clicks || 0,
     }));
 
-    const visibleAds = formattedAds.filter((ad) => !hiddenAdvertisers.includes(ad.advertiser));
+    const visibleAds = formattedAds.filter((ad) => {
+      if (hiddenAdvertisers.includes(ad.advertiser)) return false;
+
+      // Country targeting filter (All countries vs specific countries)
+      if (ad.targetCountryType === 'specific' && Array.isArray(ad.targetCountries) && ad.targetCountries.length > 0) {
+        if (userCountry && !ad.targetCountries.some((c: string) => c.toLowerCase() === userCountry.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Gender targeting filter (All vs male vs female)
+      if (ad.targetGender && ad.targetGender !== 'all') {
+        if (userGender && userGender !== ad.targetGender) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // If user has Premium, they don't see third-party ads in channels/chats
+    const finalAds = isUserPremium ? [] : visibleAds;
 
     // Asynchronously record impressions for loaded visible ads
-    if (visibleAds.length > 0) {
-      const adIds = visibleAds.map((a) => a.id);
+    if (finalAds.length > 0) {
+      const adIds = finalAds.map((a) => a.id);
       Ad.updateMany({ _id: { $in: adIds } }, { $inc: { impressions: 1 } }).catch(() => {});
     }
 
-    // Dynamic advertisers catalog from active DB ads
+    // Dynamic advertisers catalog from actual active DB ads
     const advertisers = Array.from(new Set(allDbAds.map((a) => a.advertiser))).map((name) => {
-      const match = DEFAULT_ADVERTISERS.find((d) => d.name.toLowerCase() === name.toLowerCase());
       const sample = allDbAds.find((a) => a.advertiser === name);
+      const cleanName = (name || '').trim();
+      const initials = cleanName.length > 0
+        ? cleanName.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+        : 'AD';
       return {
-        name,
-        category: match?.category || sample?.category || 'Sponsor',
-        initials: match?.initials || name.substring(0, 2).toUpperCase(),
-        colorHex: match?.colorHex || '#8E52EA',
-        website: match?.website || sample?.url || 'https://novix.me',
+        name: cleanName,
+        category: sample?.category || 'Sponsor',
+        initials,
+        colorHex: '#2481CC',
+        website: sample?.url || 'https://novix.me',
       };
     });
 
     return NextResponse.json({
-      isPremiumNoAds: false,
-      ads: visibleAds,
+      isPremiumNoAds: isUserPremium,
+      ads: finalAds,
       allAds: formattedAds,
-      advertisers: advertisers.length > 0 ? advertisers : DEFAULT_ADVERTISERS,
+      myAds,
+      advertisers,
       savedAds,
       hiddenAdvertisers,
       adPreferences,
@@ -201,6 +184,195 @@ export async function POST(request: NextRequest) {
     const user = await User.findById(payload.userId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // ── CREATE NEW AD ──
+    if (action === 'create_ad') {
+      const {
+        title,
+        description,
+        advertiser: advName,
+        advertiserLogo,
+        imageUrl,
+        ctaText,
+        url,
+        category,
+        adType,
+        targetCountryType,
+        targetCountries,
+        targetGender,
+        saveOnly,
+        subscribeDays,
+      } = body;
+
+      if (!title || !description) {
+        return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
+      }
+
+      const days = Number(subscribeDays) || 0;
+      const willActivate = !saveOnly && days > 0;
+      const activeUntil = willActivate ? new Date(Date.now() + days * 24 * 60 * 60 * 1000) : undefined;
+
+      const newAd = await Ad.create({
+        title: title.trim(),
+        description: description.trim(),
+        advertiser: (advName || user.name || 'Novix Sponsor').trim(),
+        advertiserLogo: advertiserLogo || user.avatar || '',
+        imageUrl: imageUrl || '',
+        ctaText: ctaText?.trim() || 'Learn More',
+        url: url?.trim() || 'https://novix.me',
+        category: category?.trim() || 'General',
+        isActive: willActivate,
+        status: willActivate ? 'active' : 'draft',
+        creatorId: user._id,
+        creatorName: user.name || '',
+        creatorAvatar: user.avatar || '',
+        dailyRate: 1,
+        subscribedDays: days,
+        activeUntil: activeUntil,
+        adType: adType || 'website',
+        targetCountryType: targetCountryType === 'specific' ? 'specific' : 'all',
+        targetCountries: Array.isArray(targetCountries) ? targetCountries : [],
+        targetGender: ['male', 'female'].includes(targetGender) ? targetGender : 'all',
+        impressions: 0,
+        clicks: 0,
+      });
+
+      return NextResponse.json({
+        success: true,
+        ad: {
+          id: newAd._id.toString(),
+          title: newAd.title,
+          description: newAd.description,
+          advertiser: newAd.advertiser,
+          advertiserLogo: newAd.advertiserLogo,
+          imageUrl: newAd.imageUrl,
+          ctaText: newAd.ctaText,
+          url: newAd.url,
+          category: newAd.category,
+          isActive: newAd.isActive,
+          status: newAd.status,
+          dailyRate: newAd.dailyRate,
+          subscribedDays: newAd.subscribedDays,
+          activeUntil: newAd.activeUntil?.toISOString() || null,
+          adType: newAd.adType,
+          targetCountryType: newAd.targetCountryType,
+          targetCountries: newAd.targetCountries,
+          targetGender: newAd.targetGender,
+          impressions: 0,
+          clicks: 0,
+          createdAt: newAd.createdAt,
+        },
+      });
+    }
+
+    // ── SUBSCRIBE / EXTEND AD DURATION ($1/DAY) ──
+    if (action === 'subscribe_ad') {
+      const { adId, days = 1 } = body;
+      const numDays = Math.max(1, Number(days) || 1);
+      const ad = await Ad.findOne({ _id: adId, creatorId: user._id });
+      if (!ad) {
+        return NextResponse.json({ error: 'Ad not found or unauthorized' }, { status: 404 });
+      }
+
+      const currentExpiry =
+        ad.activeUntil && new Date(ad.activeUntil) > new Date()
+          ? new Date(ad.activeUntil).getTime()
+          : Date.now();
+      const newExpiry = new Date(currentExpiry + numDays * 24 * 60 * 60 * 1000);
+
+      ad.isActive = true;
+      ad.status = 'active';
+      ad.activeUntil = newExpiry;
+      ad.subscribedDays = (ad.subscribedDays || 0) + numDays;
+      await ad.save();
+
+      return NextResponse.json({
+        success: true,
+        ad: {
+          id: ad._id.toString(),
+          status: ad.status,
+          isActive: ad.isActive,
+          activeUntil: ad.activeUntil.toISOString(),
+          subscribedDays: ad.subscribedDays,
+        },
+        message: `Ad successfully subscribed for ${numDays} day(s) at $1/day!`,
+      });
+    }
+
+    // ── TOGGLE STATUS (PAUSE / RESUME ANYTIME) ──
+    if (action === 'toggle_status') {
+      const { adId, pause } = body;
+      const ad = await Ad.findOne({ _id: adId, creatorId: user._id });
+      if (!ad) {
+        return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
+      }
+
+      if (pause) {
+        ad.isActive = false;
+        ad.status = 'paused';
+      } else {
+        ad.isActive = true;
+        ad.status = 'active';
+        if (!ad.activeUntil || new Date(ad.activeUntil) <= new Date()) {
+          ad.activeUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          ad.subscribedDays = (ad.subscribedDays || 0) + 1;
+        }
+      }
+      await ad.save();
+
+      return NextResponse.json({
+        success: true,
+        ad: {
+          id: ad._id.toString(),
+          status: ad.status,
+          isActive: ad.isActive,
+          activeUntil: ad.activeUntil?.toISOString() || null,
+        },
+      });
+    }
+
+    // ── UPDATE AD DETAILS ──
+    if (action === 'update_ad') {
+      const {
+        adId,
+        title,
+        description,
+        advertiser: advName,
+        imageUrl,
+        ctaText,
+        url,
+        category,
+        targetCountryType,
+        targetCountries,
+        targetGender,
+      } = body;
+      const ad = await Ad.findOne({ _id: adId, creatorId: user._id });
+      if (!ad) {
+        return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
+      }
+      if (title) ad.title = title.trim();
+      if (description) ad.description = description.trim();
+      if (advName) ad.advertiser = advName.trim();
+      if (imageUrl !== undefined) ad.imageUrl = imageUrl;
+      if (ctaText) ad.ctaText = ctaText.trim();
+      if (url) ad.url = url.trim();
+      if (category) ad.category = category.trim();
+      if (targetCountryType !== undefined) ad.targetCountryType = targetCountryType === 'specific' ? 'specific' : 'all';
+      if (targetCountries !== undefined && Array.isArray(targetCountries)) ad.targetCountries = targetCountries;
+      if (targetGender !== undefined) ad.targetGender = ['male', 'female'].includes(targetGender) ? targetGender : 'all';
+      await ad.save();
+      return NextResponse.json({ success: true, ad });
+    }
+
+    // ── DELETE AD ──
+    if (action === 'delete_ad') {
+      const { adId } = body;
+      const deleted = await Ad.findOneAndDelete({ _id: adId, creatorId: user._id });
+      if (!deleted) {
+        return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, message: 'Ad deleted successfully' });
     }
 
     if (action === 'save_ad') {
@@ -257,6 +429,24 @@ export async function POST(request: NextRequest) {
       };
       await user.save();
       return NextResponse.json({ success: true, adPreferences: user.adPreferences });
+    }
+
+    // ── RECORD AD CLICK ──
+    if (action === 'record_click' || action === 'click') {
+      const targetId = body.adId || body.id;
+      if (targetId) {
+        await Ad.findByIdAndUpdate(targetId, { $inc: { clicks: 1 } }).catch(() => {});
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // ── RECORD AD IMPRESSION ──
+    if (action === 'record_impression' || action === 'impression') {
+      const targetId = body.adId || body.id;
+      if (targetId) {
+        await Ad.findByIdAndUpdate(targetId, { $inc: { impressions: 1 } }).catch(() => {});
+      }
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

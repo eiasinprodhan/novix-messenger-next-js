@@ -75,6 +75,9 @@ export async function POST(request: NextRequest) {
       url: url.trim(),
       category: category?.trim() || 'General',
       isActive: isActive !== false,
+      // Explicitly set status so admin ads appear in active ad queries
+      status: isActive !== false ? 'active' : 'paused',
+      // No creatorId / no activeUntil — admin ads run indefinitely until manually paused
       impressions: 0,
       clicks: 0,
     });
@@ -111,6 +114,11 @@ export async function PATCH(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Ad ID is required' }, { status: 400 });
+    }
+
+    // Sync status field when isActive is being toggled
+    if (typeof updates.isActive === 'boolean' && updates.status === undefined) {
+      updates.status = updates.isActive ? 'active' : 'paused';
     }
 
     const updatedAd = await Ad.findByIdAndUpdate(id, { $set: updates }, { new: true });

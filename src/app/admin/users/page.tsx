@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import DeleteConfirmModal from '@/components/admin/DeleteConfirmModal';
 import { 
   Search, 
   UserPlus, 
@@ -26,7 +28,9 @@ import {
   Eye,
   Edit3,
   Star,
-  Crown
+  Crown,
+  Users as UsersIcon,
+  RefreshCw
 } from 'lucide-react';
 
 interface User {
@@ -47,6 +51,8 @@ interface User {
   createdAt: string;
 }
 
+const USERS_CACHE_KEY = 'novix_admin_users_cache';
+
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +60,20 @@ export default function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Restore cached users post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(USERS_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setUsers(cached);
+          setLoading(false);
+        }
+      }
+    } catch {}
+  }, []);
 
   // Modals
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -81,7 +101,7 @@ export default function AdminUsers() {
   const [actionSuccess, setActionSuccess] = useState('');
 
   const fetchUsers = async (q = '', filterRole = '', currentPage = 1) => {
-    setLoading(true);
+    if (users.length === 0) setLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
       let url = `/api/admin/users?q=${encodeURIComponent(q)}&page=${currentPage}&limit=10`;
@@ -95,6 +115,11 @@ export default function AdminUsers() {
       if (res.ok && data.users) {
         setUsers(data.users);
         setTotalPages(data.pagination?.pages || 1);
+        if (!q && !filterRole && currentPage === 1) {
+          try {
+            localStorage.setItem(USERS_CACHE_KEY, JSON.stringify(data.users));
+          } catch {}
+        }
       }
     } catch (err) {
       console.error('Failed to fetch users', err);
@@ -182,7 +207,19 @@ export default function AdminUsers() {
     }
   };
 
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const updateUserRole = async (userId: string, newRole: 'user' | 'admin') => {
+    const previousUsers = [...users];
+    // Fast optimistic update
+    setUsers((prev) => prev.map((u) => (u._id === userId ? { ...u, role: newRole } : u)));
+    if (selectedUser && selectedUser._id === userId) {
+      setSelectedUser({ ...selectedUser, role: newRole });
+    }
+    toast.success(`User role changed to ${newRole}`);
+
     try {
       const token = localStorage.getItem('adminToken');
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -194,17 +231,27 @@ export default function AdminUsers() {
         body: JSON.stringify({ role: newRole }),
       });
 
-      if (res.ok) {
-        setUsers(users.map((u) => (u._id === userId ? { ...u, role: newRole } : u)));
-        if (selectedUser) setSelectedUser({ ...selectedUser, role: newRole });
-        setActionSuccess(`User role updated to ${newRole}`);
+      if (!res.ok) {
+        setUsers(previousUsers);
+        toast.error('Failed to update user role');
       }
     } catch (err) {
-      console.error(err);
+      setUsers(previousUsers);
+      toast.error('Network error updating role');
     }
   };
 
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    const previousUsers = [...users];
+    
+    // Fast optimistic toggle
+    setUsers((prev) => prev.map((u) => (u._id === userId ? { ...u, isVerified: nextStatus } : u)));
+    if (selectedUser && selectedUser._id === userId) {
+      setSelectedUser({ ...selectedUser, isVerified: nextStatus });
+    }
+    toast.success(nextStatus ? 'Badge verified' : 'Badge unverified');
+
     try {
       const token = localStorage.getItem('adminToken');
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -213,16 +260,16 @@ export default function AdminUsers() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ isVerified: !currentStatus }),
+        body: JSON.stringify({ isVerified: nextStatus }),
       });
 
-      if (res.ok) {
-        setUsers(users.map((u) => (u._id === userId ? { ...u, isVerified: !currentStatus } : u)));
-        if (selectedUser) setSelectedUser({ ...selectedUser, isVerified: !currentStatus });
-        setActionSuccess(`Verification status updated`);
+      if (!res.ok) {
+        setUsers(previousUsers);
+        toast.error('Failed to update verification status');
       }
     } catch (err) {
-      console.error(err);
+      setUsers(previousUsers);
+      toast.error('Network error updating verification');
     }
   };
 
@@ -246,7 +293,29 @@ export default function AdminUsers() {
     e.preventDefault();
     if (!editUser) return;
     setActionError('');
-    setActionSuccess('');
+
+    // Fast optimistic update
+    const previousUsers = [...users];
+    setUsers((prev) =>
+      prev.map((u) =>
+        u._id === editUser._id
+          ? {
+              ...u,
+              name: editFormData.name,
+              username: editFormData.username,
+              email: editFormData.email,
+              bio: editFormData.bio,
+              role: editFormData.role,
+              isVerified: editFormData.isVerified,
+            }
+          : u
+      )
+    );
+    if (inspectUser && inspectUser._id === editUser._id) {
+      setInspectUser({ ...inspectUser, ...editFormData });
+    }
+    setIsEditOpen(false);
+    toast.success(`User "${editFormData.name}" updated successfully!`);
 
     try {
       const token = localStorage.getItem('adminToken');
@@ -273,24 +342,32 @@ export default function AdminUsers() {
       });
 
       const data = await res.json();
-
-      if (res.ok && data.user) {
-        setUsers(users.map((u) => (u._id === editUser._id ? { ...u, ...data.user } : u)));
-        if (inspectUser && inspectUser._id === editUser._id) {
-          setInspectUser({ ...inspectUser, ...data.user });
-        }
-        setActionSuccess(`User "${data.user.name}" updated successfully!`);
-        setIsEditOpen(false);
-      } else {
-        setActionError(data.error || 'Failed to update user');
+      if (!res.ok) {
+        setUsers(previousUsers);
+        toast.error(data.error || 'Failed to update user');
       }
     } catch (err: any) {
-      setActionError(err.message || 'Error updating user');
+      setUsers(previousUsers);
+      toast.error(err.message || 'Error updating user');
     }
   };
 
-  const deleteUser = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete account "${name}"? This action cannot be reversed.`)) return;
+  const confirmDeleteUser = async () => {
+    if (!deleteTarget) return;
+    const { id, name } = deleteTarget;
+    setIsDeleting(true);
+
+    const previousUsers = [...users];
+
+    // Fast optimistic removal
+    setUsers((prev) => prev.filter((u) => u._id !== id));
+    if (selectedUser?._id === id) setSelectedUser(null);
+    if (inspectUser?._id === id) setInspectUser(null);
+    if (editUser?._id === id) setIsEditOpen(false);
+
+    setDeleteTarget(null);
+    setIsDeleting(false);
+    toast.success(`Account "${name}" deleted permanently.`);
 
     try {
       const token = localStorage.getItem('adminToken');
@@ -300,18 +377,13 @@ export default function AdminUsers() {
       });
 
       const data = await res.json();
-
-      if (res.ok) {
-        setUsers(users.filter((u) => u._id !== id));
-        if (selectedUser?._id === id) setSelectedUser(null);
-        if (inspectUser?._id === id) setInspectUser(null);
-        if (editUser?._id === id) setIsEditOpen(false);
-        setActionSuccess(data.message || 'User account permanently deleted.');
-      } else {
-        alert(data.error || 'Failed to delete user');
+      if (!res.ok) {
+        setUsers(previousUsers);
+        toast.error(data.error || 'Failed to delete user');
       }
     } catch (err: any) {
-      alert(err.message || 'Error deleting user');
+      setUsers(previousUsers);
+      toast.error(err.message || 'Error deleting user');
     }
   };
 
@@ -349,7 +421,7 @@ export default function AdminUsers() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            User Directory & Accounts
+            Users
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
             Manage user accounts, adjust roles, verify credentials, and broadcast alerts
@@ -393,7 +465,7 @@ export default function AdminUsers() {
       )}
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="p-4 bg-white dark:bg-[#111a2e] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row gap-3">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="relative flex-1">
             <input
@@ -401,7 +473,7 @@ export default function AdminUsers() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, username, or email..."
-              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#111a2e] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 shadow-xs transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition font-medium"
             />
             <Search className="absolute left-3.5 top-3 text-slate-400 dark:text-slate-500" size={18} />
           </div>
@@ -420,7 +492,7 @@ export default function AdminUsers() {
               setRoleFilter(e.target.value);
               setPage(1);
             }}
-            className="bg-white dark:bg-[#111a2e] border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:border-blue-500 shadow-xs transition cursor-pointer"
+            className="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:border-blue-500 shadow-xs transition cursor-pointer"
           >
             <option value="">All Account Roles</option>
             <option value="user">Regular Users</option>
@@ -434,7 +506,7 @@ export default function AdminUsers() {
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
           <table className="w-full text-left text-xs sm:text-sm min-w-[680px]">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+              <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/50 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                 <th className="py-3.5 px-4 sm:px-6">User Account</th>
                 <th className="py-3.5 px-4">Contact</th>
                 <th className="py-3.5 px-4">Role</th>
@@ -443,20 +515,20 @@ export default function AdminUsers() {
                 <th className="py-3.5 px-4 sm:px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {loading ? (
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 text-xs">
+              {loading && users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span>Loading user accounts...</span>
-                    </div>
+                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                    <RefreshCw size={24} className="animate-spin text-blue-500 mx-auto mb-2" />
+                    <span>Loading user accounts...</span>
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    No accounts match your search filter.
+                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                    <UsersIcon size={36} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                    <p className="font-bold text-slate-700 dark:text-slate-300">No users found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Try searching with a different keyword or adjusting role filter</p>
                   </td>
                 </tr>
               ) : (
@@ -558,8 +630,8 @@ export default function AdminUsers() {
                           <Edit3 size={16} />
                         </button>
                         <button
-                          onClick={() => deleteUser(u._id, u.name)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition"
+                          onClick={() => setDeleteTarget({ id: u._id, name: u.name })}
+                          className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition cursor-pointer"
                           title="Delete Account"
                         >
                           <Trash2 size={16} />
@@ -574,21 +646,28 @@ export default function AdminUsers() {
         </div>
 
         {/* Pagination Bar */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Page {page} of {totalPages}</span>
-          <div className="flex items-center gap-1.5">
+        <div className="p-4 bg-slate-50/70 dark:bg-slate-850/50 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing <strong className="text-slate-700 dark:text-slate-200">{users.length}</strong> accounts • Page <strong className="text-slate-700 dark:text-slate-200">{page}</strong> of <strong className="text-slate-700 dark:text-slate-200">{totalPages}</strong>
+          </span>
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(Math.max(1, page - 1))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
             >
               <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Previous</span>
             </button>
+            <span className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+              {page}
+            </span>
             <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
             >
+              <span className="hidden sm:inline">Next</span>
               <ChevronRight size={14} />
             </button>
           </div>
@@ -892,11 +971,9 @@ export default function AdminUsers() {
               </button>
               <button
                 onClick={() => {
-                  const id = inspectUser._id;
-                  const name = inspectUser.name;
-                  deleteUser(id, name);
+                  setDeleteTarget({ id: inspectUser._id, name: inspectUser.name });
                 }}
-                className="py-2.5 px-3 rounded-xl border border-red-200 dark:border-red-800/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition flex items-center gap-1.5"
+                className="py-2.5 px-3 rounded-xl border border-red-200 dark:border-red-800/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 size={14} />
                 <span>Delete</span>
@@ -1054,6 +1131,18 @@ export default function AdminUsers() {
           </div>
         </div>
       )}
+
+      {/* Delete User Confirmation Modal Popup */}
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete User Account"
+        itemName={deleteTarget?.name}
+        description={`Are you sure you want to permanently delete account "${deleteTarget?.name}"? This action cannot be reversed and all messages, media, and friendships will be removed.`}
+        confirmLabel="Delete Account"
+        isLoading={isDeleting}
+        onConfirm={confirmDeleteUser}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

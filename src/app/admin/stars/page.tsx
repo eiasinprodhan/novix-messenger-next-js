@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import {
   Star,
   Crown,
@@ -39,12 +40,56 @@ interface MonetizationUser {
   createdAt: string;
 }
 
+const STARS_CACHE_KEY = 'novix_admin_stars_cache';
+
+function StarBadgeIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`shrink-0 ${className}`}
+    >
+      <defs>
+        <linearGradient id="novixStarGoldGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FCD34D" />
+          <stop offset="45%" stopColor="#F59E0B" />
+          <stop offset="100%" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 2.5L14.92 8.62L21.5 9.57L16.75 14.28L17.87 21L12 17.85L6.13 21L7.25 14.28L2.5 9.57L9.08 8.62L12 2.5Z"
+        fill="url(#novixStarGoldGrad)"
+        stroke="#D97706"
+        strokeWidth="0.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function AdminStarsPage() {
   const [users, setUsers] = useState<MonetizationUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [tierFilter, setTierFilter] = useState<'all' | 'premium' | 'stars'>('all');
+
+  // Restore cached stars post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STARS_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setUsers(cached);
+          setLoading(false);
+        }
+      }
+    } catch {}
+  }, []);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -98,7 +143,7 @@ export default function AdminStarsPage() {
 
   const fetchUsers = async (query = '', pageNum = 1, isManual = false) => {
     if (isManual) setRefreshing(true);
-    else setLoading(true);
+    else if (users.length === 0) setLoading(true);
 
     try {
       const res = await fetch(`/api/admin/monetization?q=${encodeURIComponent(query)}&page=${pageNum}&limit=15`, {
@@ -108,6 +153,11 @@ export default function AdminStarsPage() {
       if (res.ok && data.success) {
         setUsers(data.users || []);
         if (data.stats) setStats(data.stats);
+        if (!query && pageNum === 1) {
+          try {
+            localStorage.setItem(STARS_CACHE_KEY, JSON.stringify(data.users || []));
+          } catch {}
+        }
         if (data.pagination) {
           setTotalPages(data.pagination.totalPages || 1);
           setTotalCount(data.pagination.total || 0);
@@ -152,10 +202,23 @@ export default function AdminStarsPage() {
     setIsPremiumModalOpen(true);
   };
 
-  // Submit Star Adjustment
+  // Submit Star Adjustment (Fast Optimistic Update)
   const handleSaveStars = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    
+    const delta = parseInt(starForm.amount) || 0;
+    const currentStars = selectedUser.starsBalance || 0;
+    const newStars = starForm.mode === 'add' ? currentStars + delta : Math.max(0, currentStars - delta);
+    const previousUsers = [...users];
+
+    // Instant optimistic update
+    setUsers((prev) =>
+      prev.map((u) => (u.id === selectedUser.id ? { ...u, starsBalance: newStars } : u))
+    );
+    setIsStarModalOpen(false);
+    toast.success(`Star balance adjusted to ${newStars} Stars`);
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/admin/monetization', {
@@ -170,24 +233,35 @@ export default function AdminStarsPage() {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        showNotification('success', data.message || 'Star balance updated');
-        setIsStarModalOpen(false);
-        fetchUsers(searchQuery, page);
-      } else {
-        showNotification('error', data.error || 'Failed to adjust stars');
+      if (!res.ok || !data.success) {
+        setUsers(previousUsers);
+        toast.error(data.error || 'Failed to adjust stars');
       }
     } catch (err: any) {
-      showNotification('error', err.message || 'Error updating star balance');
+      setUsers(previousUsers);
+      toast.error(err.message || 'Error updating star balance');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Submit Premium Status Update
+  // Submit Premium Status Update (Fast Optimistic Update)
   const handleSavePremium = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+
+    const previousUsers = [...users];
+    // Instant optimistic update
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === selectedUser.id
+          ? { ...u, isPremium: premiumForm.isPremium, premiumPlan: premiumForm.plan }
+          : u
+      )
+    );
+    setIsPremiumModalOpen(false);
+    toast.success('Novix VIP & Premium status updated');
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/admin/monetization', {
@@ -202,15 +276,13 @@ export default function AdminStarsPage() {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        showNotification('success', data.message || 'Novix Premium status updated');
-        setIsPremiumModalOpen(false);
-        fetchUsers(searchQuery, page);
-      } else {
-        showNotification('error', data.error || 'Failed to update premium status');
+      if (!res.ok || !data.success) {
+        setUsers(previousUsers);
+        toast.error(data.error || 'Failed to update premium status');
       }
     } catch (err: any) {
-      showNotification('error', err.message || 'Error updating premium');
+      setUsers(previousUsers);
+      toast.error(err.message || 'Error updating premium');
     } finally {
       setSubmitting(false);
     }
@@ -222,16 +294,26 @@ export default function AdminStarsPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Client-side quick filter
+  // Client-side quick filter & real-time search
   const filteredUsers = useMemo(() => {
+    let result = users;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.username.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q)
+      );
+    }
     if (tierFilter === 'premium') {
-      return users.filter((u) => u.isPremium);
+      return result.filter((u) => u.isPremium);
     }
     if (tierFilter === 'stars') {
-      return users.filter((u) => (u.starsBalance || 0) > 0);
+      return result.filter((u) => (u.starsBalance || 0) > 0);
     }
-    return users;
-  }, [users, tierFilter]);
+    return result;
+  }, [users, tierFilter, searchQuery]);
 
   // Projected new balance in star modal
   const projectedBalance = useMemo(() => {
@@ -242,10 +324,6 @@ export default function AdminStarsPage() {
     if (starForm.mode === 'deduct') return Math.max(0, current - val);
     return Math.max(0, val);
   }, [selectedUser, starForm]);
-
-  const premiumPercent = stats.totalUsers > 0
-    ? ((stats.totalPremiumUsers / stats.totalUsers) * 100).toFixed(1)
-    : '0.0';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -270,19 +348,11 @@ export default function AdminStarsPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center shadow-xs">
-              <Star size={20} className="fill-amber-500" />
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Novix Star Hub & Premium Economy
-            </h1>
-            <span className="px-2.5 py-0.5 text-[11px] font-extrabold rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-              Economy Core
-            </span>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Stars
+          </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            Oversee user star coin balances, credit promotional bounties, and govern Novix Premium VIP subscriber privileges.
+            Oversee user star coin balances, credit promotional bounties, and govern Novix Premium VIP subscriber privileges
           </p>
         </div>
 
@@ -299,108 +369,23 @@ export default function AdminStarsPage() {
         </div>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Stars in Circulation */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stars In Circulation</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-500 flex items-center justify-center">
-              <Star size={16} className="fill-amber-500" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-amber-500">
-              {stats.totalStarsInCirculation.toLocaleString()}
-            </span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <Sparkles size={12} className="text-amber-500" />
-            <span>Virtual utility currency</span>
-          </div>
-        </div>
-
-        {/* Card 2: Premium VIP Subscribers */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Premium VIP Members</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Crown size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400">
-              {stats.totalPremiumUsers.toLocaleString()}
-            </span>
-            <span className="text-xs font-semibold text-purple-500">({premiumPercent}%)</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Active paid / granted tiers
-          </div>
-        </div>
-
-        {/* Card 3: Total Accounts in Ledger */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered Wallets</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <UserIcon size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {stats.totalUsers.toLocaleString()}
-            </span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Total member directory accounts
-          </div>
-        </div>
-
-        {/* Card 4: Average Star Balance */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Average Star Wealth</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <TrendingUp size={16} />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
-              {stats.totalUsers > 0
-                ? Math.round(stats.totalStarsInCirculation / stats.totalUsers).toLocaleString()
-                : '0'}
-            </span>
-            <span className="text-xs text-slate-400 font-semibold">stars / user</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Mean circulating balance
-          </div>
-        </div>
-      </div>
-
       {/* Filter & Search Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="p-4 rounded-2xl bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search Input Form */}
-        <form onSubmit={handleSearchSubmit} className="relative w-full md:w-88">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search by name, @username, email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-20 py-2 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-white"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition font-medium"
           />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
-          >
-            Find
-          </button>
-        </form>
+        </div>
 
         {/* Quick Filter Buttons */}
-        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold w-full md:w-auto">
+        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold w-full sm:w-auto">
           <button
             onClick={() => setTierFilter('all')}
             className={`px-3 py-1.5 rounded-lg transition ${
@@ -426,11 +411,11 @@ export default function AdminStarsPage() {
             onClick={() => setTierFilter('stars')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
               tierFilter === 'stars'
-                ? 'bg-white dark:bg-slate-900 text-amber-500 shadow-xs'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
             }`}
           >
-            <Star size={12} className="fill-amber-500" />
+            <StarBadgeIcon size={13} />
             <span>Star Holders</span>
           </button>
         </div>
@@ -450,7 +435,7 @@ export default function AdminStarsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
-              {loading ? (
+              {loading && users.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-16 text-center text-slate-400">
                     <RefreshCw size={24} className="animate-spin text-amber-500 mx-auto mb-2" />
@@ -508,8 +493,8 @@ export default function AdminStarsPage() {
 
                     {/* Stars Balance */}
                     <td className="py-3.5 px-4">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-400 font-black tabular-nums">
-                        <Star size={13} className="fill-amber-500 text-amber-500 shrink-0" />
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 text-slate-900 dark:text-white font-bold tabular-nums">
+                        <StarBadgeIcon size={14} />
                         <span>{(user.starsBalance || 0).toLocaleString()}</span>
                       </div>
                     </td>
@@ -545,10 +530,10 @@ export default function AdminStarsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openAdjustStarsModal(user)}
-                          className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 font-bold text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-700 font-semibold text-[11px] transition flex items-center gap-1.5 cursor-pointer"
                           title="Add or deduct stars"
                         >
-                          <Star size={12} className="fill-amber-500" />
+                          <StarBadgeIcon size={13} />
                           <span>Adjust Stars</span>
                         </button>
 
@@ -570,29 +555,29 @@ export default function AdminStarsPage() {
         </div>
 
         {/* Pagination Bar */}
-        <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
-          <div>
-            Showing <span className="text-slate-800 dark:text-slate-200 font-bold">{filteredUsers.length}</span> of{' '}
-            <span className="text-slate-800 dark:text-slate-200 font-bold">{totalCount}</span> accounts
-          </div>
-
+        <div className="p-4 bg-slate-50/70 dark:bg-slate-850/50 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing <strong className="text-slate-700 dark:text-slate-200">{filteredUsers.length}</strong> accounts • Page <strong className="text-slate-700 dark:text-slate-200">{page}</strong> of <strong className="text-slate-700 dark:text-slate-200">{totalPages}</strong>
+          </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Previous</span>
             </button>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Page {page} of {totalPages}
+            <span className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+              {page}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer flex items-center gap-1 font-semibold"
             >
-              <ChevronRight size={16} />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight size={14} />
             </button>
           </div>
         </div>
@@ -605,8 +590,8 @@ export default function AdminStarsPage() {
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-500 flex items-center justify-center">
-                  <Star size={16} className="fill-amber-500" />
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <StarBadgeIcon size={18} />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -628,13 +613,13 @@ export default function AdminStarsPage() {
             {/* Modal Form */}
             <form onSubmit={handleSaveStars} className="p-6 space-y-5">
               {/* Current vs Projected Balance Card */}
-              <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     Current Balance
                   </div>
-                  <div className="text-xl font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-0.5">
-                    <Star size={16} className="fill-amber-500" />
+                  <div className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 mt-0.5">
+                    <StarBadgeIcon size={18} />
                     <span>{(selectedUser.starsBalance || 0).toLocaleString()}</span>
                   </div>
                 </div>
@@ -642,11 +627,11 @@ export default function AdminStarsPage() {
                 <div className="text-slate-400 text-lg">→</div>
 
                 <div className="text-right">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                     New Balance
                   </div>
-                  <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 justify-end mt-0.5">
-                    <Star size={16} className="fill-emerald-500" />
+                  <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 justify-end mt-0.5">
+                    <StarBadgeIcon size={18} />
                     <span>{projectedBalance.toLocaleString()}</span>
                   </div>
                 </div>

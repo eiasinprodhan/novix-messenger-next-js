@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { 
   Settings, 
   Mail, 
@@ -29,6 +30,8 @@ interface PlatformSettings {
   systemAnnouncement: string;
 }
 
+const SETTINGS_CACHE_KEY = 'novix_admin_settings_cache';
+
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings>({
     adminNotificationEmail: '',
@@ -40,17 +43,25 @@ export default function AdminSettingsPage() {
     systemAnnouncement: '',
   });
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Restore cached settings post-hydration
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+      if (raw) {
+        setSettings(JSON.parse(raw));
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetchSettings();
   }, []);
 
   const fetchSettings = async () => {
-    setLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
       const res = await fetch('/api/admin/settings', {
@@ -59,11 +70,12 @@ export default function AdminSettingsPage() {
       const data = await res.json();
       if (res.ok && data.settings) {
         setSettings(data.settings);
+        try {
+          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(data.settings));
+        } catch {}
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -86,12 +98,15 @@ export default function AdminSettingsPage() {
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: 'success', text: 'Admin settings saved successfully!' });
+        toast.success('Admin settings saved successfully!');
         if (data.settings) setSettings(data.settings);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save settings' });
+        toast.error(data.error || 'Failed to save settings');
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Network error while saving settings' });
+      toast.error('Network error while saving settings');
     } finally {
       setSaving(false);
     }
@@ -100,6 +115,7 @@ export default function AdminSettingsPage() {
   const handleSendTestEmail = async () => {
     if (!settings.adminNotificationEmail) {
       setMessage({ type: 'error', text: 'Please enter a notification email address first' });
+      toast.error('Please enter a notification email address first');
       return;
     }
 
@@ -120,37 +136,31 @@ export default function AdminSettingsPage() {
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: 'success', text: `Test alert email sent to ${settings.adminNotificationEmail}! Check your inbox.` });
+        toast.success(`Test alert email sent to ${settings.adminNotificationEmail}!`);
       } else {
         setMessage({ type: 'error', text: data.detail || data.error || 'Failed to send test email' });
+        toast.error(data.detail || data.error || 'Failed to send test email');
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Network error sending test email' });
+      toast.error('Network error sending test email');
     } finally {
       setTestingEmail(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="py-24 text-center text-slate-400">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-medium">Loading platform configuration...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-200 max-w-4xl">
+    <div className="space-y-6 animate-in fade-in duration-200 w-full">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
-          <span>Platform & Email Settings</span>
-        </h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
-          Configure admin email notification recipients, registration alerts & system operations
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Settings
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
+            Configure admin email notification recipients, registration alerts & system operations
+          </p>
+        </div>
       </div>
 
       {/* Alert Banner */}
@@ -177,7 +187,7 @@ export default function AdminSettingsPage() {
       )}
 
       {/* Section 1: Admin Email Notifications */}
-      <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-xs">
+      <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-xs w-full">
         <div className="flex items-start justify-between pb-6 border-b border-slate-100 dark:border-slate-800/80 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50 flex items-center justify-center shrink-0">
@@ -314,7 +324,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Section 2: Platform Controls */}
-      <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-xs">
+      <div className="bg-white dark:bg-[#111a2e] border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-xs w-full">
         <div className="flex items-start justify-between pb-6 border-b border-slate-100 dark:border-slate-800/80 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/50 flex items-center justify-center shrink-0">

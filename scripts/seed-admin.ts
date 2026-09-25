@@ -1,7 +1,7 @@
 import dns from 'dns';
 try {
   dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-} catch (_) {}
+} catch (_) { }
 
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -19,9 +19,9 @@ if (!MONGODB_URI) {
   process.exit(1);
 }
 
-const ADMIN_EMAIL    = process.argv[2] || 'admin@novix.com';
-const ADMIN_PASSWORD = process.argv[3] || 'Admin@123';
-const ADMIN_NAME     = process.argv[4] || 'Novix Admin';
+const ADMIN_EMAIL = process.argv[2] || 'admin@novix.com';
+const ADMIN_PASSWORD = process.argv[3] || 'Yescut1234..';
+const ADMIN_NAME = process.argv[4] || 'Novix Admin';
 const ADMIN_USERNAME = process.argv[5] || 'novixadmin';
 
 async function seedAdmin() {
@@ -32,29 +32,45 @@ async function seedAdmin() {
   const db = mongoose.connection.db!;
   const usersCollection = db.collection('users');
 
-  // Check if admin already exists
-  const existing = await usersCollection.findOne({ email: ADMIN_EMAIL.toLowerCase() });
-
-  if (existing) {
-    // Promote to admin if not already
-    if (existing.role === 'admin') {
-      console.log(`ℹ️  User "${ADMIN_EMAIL}" is already an admin. No changes made.`);
-    } else {
-      await usersCollection.updateOne(
-        { _id: existing._id },
-        { $set: { role: 'admin', isVerified: true } }
-      );
-      console.log(`✅ Existing user "${ADMIN_EMAIL}" promoted to admin.`);
-    }
-    await mongoose.disconnect();
-    return;
-  }
-
   // Hash password
   const salt = await bcrypt.genSalt(12);
   const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, salt);
 
   const now = new Date();
+
+  // Check if admin already exists
+  const existing = await usersCollection.findOne({ email: ADMIN_EMAIL.toLowerCase() });
+
+  if (existing) {
+    await usersCollection.updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          password: hashedPassword,
+          role: 'admin',
+          isVerified: true,
+          name: ADMIN_NAME,
+          username: ADMIN_USERNAME.toLowerCase(),
+          updatedAt: now,
+        },
+      }
+    );
+
+    console.log('');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('  ✅  Admin account updated successfully!');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`  📧 Email    : ${ADMIN_EMAIL}`);
+    console.log(`  🔑 Password : ${ADMIN_PASSWORD}`);
+    console.log(`  👤 Username : ${ADMIN_USERNAME}`);
+    console.log(`  🛡️  Role    : admin`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('  → Login at: /admin/login');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    await mongoose.disconnect();
+    return;
+  }
 
   await usersCollection.insertOne({
     name: ADMIN_NAME,
