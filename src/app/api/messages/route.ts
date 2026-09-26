@@ -4,6 +4,7 @@ import Message from '@/models/Message';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
 import User from '@/models/User';
+import Product from '@/models/Product';
 import { messaging } from '@/lib/firebase-admin';
 import { getCache, setCache, invalidateFriendsCache, invalidateChatCache } from '@/lib/redis';
 
@@ -33,16 +34,37 @@ export async function GET(request: NextRequest) {
     const isSelfSavedMessages = friendId === payload.userId;
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
-      // Verify they are friends
-      const friendship = await Friendship.findOne({
+      let friendship = await Friendship.findOne({
         $or: [
-          { requester: payload.userId, recipient: friendId, status: 'accepted' },
-          { requester: friendId, recipient: payload.userId, status: 'accepted' },
+          { requester: payload.userId, recipient: friendId },
+          { requester: friendId, recipient: payload.userId },
         ],
       });
 
-      if (!friendship) {
-        return NextResponse.json({ error: 'You are not friends with this user' }, { status: 403 });
+      if (friendship?.status === 'blocked') {
+        return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
+      }
+
+      if (!friendship || friendship.status !== 'accepted') {
+        const isMarketplaceContact = await Product.exists({
+          $or: [{ seller: payload.userId }, { seller: friendId }],
+        });
+        if (isMarketplaceContact) {
+          if (!friendship) {
+            friendship = await Friendship.create({
+              requester: payload.userId,
+              recipient: friendId,
+              status: 'accepted',
+            });
+          } else {
+            friendship.status = 'accepted';
+            await friendship.save();
+          }
+          await invalidateFriendsCache(payload.userId);
+          await invalidateFriendsCache(friendId);
+        } else {
+          return NextResponse.json({ error: 'You are not friends with this user' }, { status: 403 });
+        }
       }
     }
 
@@ -175,16 +197,37 @@ export async function POST(request: NextRequest) {
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
-      // Verify friendship
-      const friendship = await Friendship.findOne({
+      let friendship = await Friendship.findOne({
         $or: [
-          { requester: payload.userId, recipient: receiverId, status: 'accepted' },
-          { requester: receiverId, recipient: payload.userId, status: 'accepted' },
+          { requester: payload.userId, recipient: receiverId },
+          { requester: receiverId, recipient: payload.userId },
         ],
       });
 
-      if (!friendship) {
-        return NextResponse.json({ error: 'You can only chat with friends' }, { status: 403 });
+      if (friendship?.status === 'blocked') {
+        return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
+      }
+
+      if (!friendship || friendship.status !== 'accepted') {
+        const isMarketplaceContact = await Product.exists({
+          $or: [{ seller: payload.userId }, { seller: receiverId }],
+        });
+        if (isMarketplaceContact) {
+          if (!friendship) {
+            friendship = await Friendship.create({
+              requester: payload.userId,
+              recipient: receiverId,
+              status: 'accepted',
+            });
+          } else {
+            friendship.status = 'accepted';
+            await friendship.save();
+          }
+          await invalidateFriendsCache(payload.userId);
+          await invalidateFriendsCache(receiverId);
+        } else {
+          return NextResponse.json({ error: 'You can only chat with friends' }, { status: 403 });
+        }
       }
     }
 
