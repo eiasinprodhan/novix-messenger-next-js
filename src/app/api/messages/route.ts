@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const isSelfSavedMessages = friendId === payload.userId;
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
-      let friendship = await Friendship.findOne({
+      const friendship = await Friendship.findOne({
         $or: [
           { requester: payload.userId, recipient: friendId },
           { requester: friendId, recipient: payload.userId },
@@ -43,28 +43,6 @@ export async function GET(request: NextRequest) {
 
       if (friendship?.status === 'blocked') {
         return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
-      }
-
-      if (!friendship || friendship.status !== 'accepted') {
-        const isMarketplaceContact = await Product.exists({
-          $or: [{ seller: payload.userId }, { seller: friendId }],
-        });
-        if (isMarketplaceContact) {
-          if (!friendship) {
-            friendship = await Friendship.create({
-              requester: payload.userId,
-              recipient: friendId,
-              status: 'accepted',
-            });
-          } else {
-            friendship.status = 'accepted';
-            await friendship.save();
-          }
-          await invalidateFriendsCache(payload.userId);
-          await invalidateFriendsCache(friendId);
-        } else {
-          return NextResponse.json({ error: 'You are not friends with this user' }, { status: 403 });
-        }
       }
     }
 
@@ -145,7 +123,8 @@ export async function GET(request: NextRequest) {
         path: 'replyTo',
         select: 'content sender type imageUrl',
         populate: { path: 'sender', select: 'name username' },
-      });
+      })
+      .lean();
 
     const finalResponse = { messages: messages.reverse() };
     await setCache(cacheKey, finalResponse, 120);
@@ -182,9 +161,12 @@ export async function POST(request: NextRequest) {
       expiresAt,
       isSilent = false,
       scheduledFor,
+      encryptedPayload,
+      iv,
+      isEncrypted,
     } = await request.json();
 
-    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !checklist && !forwardFrom)) {
+    if (!receiverId || (!content && !imageUrl && !attachments?.length && !poll && !checklist && !forwardFrom && !encryptedPayload)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -208,26 +190,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
       }
 
-      if (!friendship || friendship.status !== 'accepted') {
-        const isMarketplaceContact = await Product.exists({
-          $or: [{ seller: payload.userId }, { seller: receiverId }],
+      // Allow anybody to message anybody without being friends: auto-establish accepted conversation
+      if (!friendship) {
+        friendship = await Friendship.create({
+          requester: payload.userId,
+          recipient: receiverId,
+          status: 'accepted',
         });
-        if (isMarketplaceContact) {
-          if (!friendship) {
-            friendship = await Friendship.create({
-              requester: payload.userId,
-              recipient: receiverId,
-              status: 'accepted',
-            });
-          } else {
-            friendship.status = 'accepted';
-            await friendship.save();
-          }
-          await invalidateFriendsCache(payload.userId);
-          await invalidateFriendsCache(receiverId);
-        } else {
-          return NextResponse.json({ error: 'You can only chat with friends' }, { status: 403 });
-        }
+        await invalidateFriendsCache(payload.userId);
+        await invalidateFriendsCache(receiverId);
+      } else if (friendship.status !== 'accepted') {
+        friendship.status = 'accepted';
+        await friendship.save();
+        await invalidateFriendsCache(payload.userId);
+        await invalidateFriendsCache(receiverId);
       }
     }
 
@@ -281,6 +257,10 @@ export async function POST(request: NextRequest) {
       content: content || '',
       type,
       imageUrl: imageUrl || null,
+      encryptedPayload: encryptedPayload || null,
+      iv: iv || null,
+      isEncrypted: Boolean(isEncrypted),
+      isDelivered: false,
       status: isSelfSavedMessages ? 'read' : initialStatus,
       replyTo: replyTo || null,
       forwardFrom: forwardFrom || undefined,

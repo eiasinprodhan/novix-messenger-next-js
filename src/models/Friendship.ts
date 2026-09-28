@@ -31,6 +31,8 @@ const FriendshipSchema: Schema<IFriendship> = new Schema(
 
 // Ensure no duplicate friendships and fast queries
 FriendshipSchema.index({ requester: 1, recipient: 1 }, { unique: true });
+FriendshipSchema.index({ requester: 1, status: 1, createdAt: -1 });
+FriendshipSchema.index({ recipient: 1, status: 1, createdAt: -1 });
 FriendshipSchema.index({ requester: 1, status: 1 });
 FriendshipSchema.index({ recipient: 1, status: 1 });
 

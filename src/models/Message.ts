@@ -48,6 +48,11 @@ export interface IMessage extends Document {
   replyTo?: mongoose.Types.ObjectId;
   reactions: { user: mongoose.Types.ObjectId; emoji: string }[];
   readBy: mongoose.Types.ObjectId[];
+  encryptedPayload?: string;
+  iv?: string;
+  isEncrypted?: boolean;
+  isDelivered?: boolean;
+  deliveredAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -190,6 +195,26 @@ const MessageSchema: Schema<IMessage> = new Schema(
         ref: 'User',
       },
     ],
+    encryptedPayload: {
+      type: String,
+      default: null,
+    },
+    iv: {
+      type: String,
+      default: null,
+    },
+    isEncrypted: {
+      type: Boolean,
+      default: false,
+    },
+    isDelivered: {
+      type: Boolean,
+      default: false,
+    },
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -198,8 +223,12 @@ const MessageSchema: Schema<IMessage> = new Schema(
 MessageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
 MessageSchema.index({ receiver: 1, sender: 1, createdAt: -1 });
 MessageSchema.index({ receiver: 1, status: 1 });
+MessageSchema.index({ receiver: 1, isDelivered: 1 });
 MessageSchema.index({ group: 1, createdAt: -1 });
 MessageSchema.index({ createdAt: -1 });
+
+// WhatsApp-style TTL: Ephemeral storage ensures undelivered messages are purged after 14 days max
+MessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 14 * 24 * 3600 });
 
 const Message: Model<IMessage> =
   mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);

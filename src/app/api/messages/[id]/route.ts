@@ -63,6 +63,14 @@ export async function DELETE(
     message.imageUrl = undefined;
     await message.save();
 
+    // Invalidate chat cache
+    try {
+      const { invalidateChatCache } = await import('@/lib/redis');
+      if (!message.group && message.receiver) {
+        await invalidateChatCache(message.sender.toString(), message.receiver.toString());
+      }
+    } catch (_) {}
+
     // Broadcast deletion
     try {
       const { getIO } = await import('@/lib/socket');

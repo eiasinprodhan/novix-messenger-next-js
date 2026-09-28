@@ -43,29 +43,35 @@ export async function GET(request: NextRequest) {
       query = { requester: payload.userId, status: 'blocked' };
     }
 
-    let friendships = await Friendship.find(query)
-      .populate('requester', 'name username avatar isOnline lastSeen role')
-      .populate('recipient', 'name username avatar isOnline lastSeen role')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Batch query unread message counts in a single aggregation for all friends
     const userObjId = new mongoose.Types.ObjectId(payload.userId);
-    const unreadCountsAgg = await Message.aggregate([
-      {
-        $match: {
-          receiver: userObjId,
-          status: { $ne: 'read' },
-          deletedBy: { $ne: userObjId },
+
+    // Parallelize friendship query, unread message counts, and hidden chats lookup
+    const [friendships, unreadCountsAgg, currentUser] = await Promise.all([
+      Friendship.find(query)
+        .populate('requester', 'name username avatar country isOnline lastSeen role')
+        .populate('recipient', 'name username avatar country isOnline lastSeen role')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Message.aggregate([
+        {
+          $match: {
+            receiver: userObjId,
+            status: { $ne: 'read' },
+            deletedBy: { $ne: userObjId },
+          },
         },
-      },
-      {
-        $group: {
-          _id: '$sender',
-          count: { $sum: 1 },
+        {
+          $group: {
+            _id: '$sender',
+            count: { $sum: 1 },
+          },
         },
-      },
+      ]),
+      (type === 'friends' && !includeHidden)
+        ? User.findById(payload.userId).select('hiddenChats').lean()
+        : Promise.resolve(null),
     ]);
+
     const unreadMap = new Map<string, number>();
     for (const row of unreadCountsAgg) {
       if (row._id) {
@@ -73,31 +79,85 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Filter out friendships where either user has role 'admin'
-    const results = await Promise.all(friendships.map(async (f: any) => {
-      if (!f.requester || !f.recipient) return null;
-      const isRequester = f.requester._id.toString() === payload.userId;
-      const otherUser = isRequester ? f.recipient : f.requester;
-      const isAdminChat = otherUser.role === 'admin';
+    // Collect friend user IDs to batch fetch their last messages in a single query
+    const otherUserObjIds: mongoose.Types.ObjectId[] = [];
+    for (const f of friendships) {
+      if (!f.requester || !f.recipient) continue;
+      const isRequester = (f.requester as any)._id.toString() === payload.userId;
+      const otherUser = isRequester ? (f.recipient as any) : (f.requester as any);
+      if (otherUser && otherUser._id) {
+        otherUserObjIds.push(new mongoose.Types.ObjectId(otherUser._id.toString()));
+      }
+    }
 
-      // Get last message for this friendship (uses compound index)
-      const lastMessage = await Message.findOne({
-        $or: [
-          { sender: payload.userId, receiver: otherUser._id },
-          { sender: otherUser._id, receiver: payload.userId },
-        ],
-        deletedBy: { $ne: payload.userId },
-      })
-        .sort({ createdAt: -1 })
-        .select('content createdAt sender type imageUrl status')
-        .lean();
+    const lastMessagesMap = new Map<string, any>();
+    if (otherUserObjIds.length > 0) {
+      const lastMessagesAgg = await Message.aggregate([
+        {
+          $match: {
+            deletedBy: { $ne: userObjId },
+            $or: [
+              { sender: userObjId, receiver: { $in: otherUserObjIds } },
+              { receiver: userObjId, sender: { $in: otherUserObjIds } },
+            ],
+          },
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+        {
+          $group: {
+            _id: {
+              $cond: [
+                { $eq: ['$sender', userObjId] },
+                '$receiver',
+                '$sender',
+              ],
+            },
+            content: { $first: '$content' },
+            createdAt: { $first: '$createdAt' },
+            sender: { $first: '$sender' },
+            type: { $first: '$type' },
+            imageUrl: { $first: '$imageUrl' },
+            status: { $first: '$status' },
+          },
+        },
+      ]);
+
+      for (const row of lastMessagesAgg) {
+        if (row._id) {
+          lastMessagesMap.set(row._id.toString(), row);
+        }
+      }
+    }
+
+    const hiddenIds = new Set(
+      ((currentUser as any)?.hiddenChats ?? []).map((id: any) => id.toString())
+    );
+
+    const validResults: any[] = [];
+    for (const f of friendships) {
+      if (!f.requester || !f.recipient) continue;
+      const isRequester = (f.requester as any)._id.toString() === payload.userId;
+      const otherUser = isRequester ? (f.recipient as any) : (f.requester as any);
+      if (!otherUser || !otherUser._id) continue;
+
+      const otherUserIdStr = otherUser._id.toString();
+
+      // For 'friends' type, skip chats the user has hidden
+      if (type === 'friends' && !includeHidden && hiddenIds.has(otherUserIdStr)) {
+        continue;
+      }
+
+      const isAdminChat = otherUser.role === 'admin';
+      const lastMsg = lastMessagesMap.get(otherUserIdStr);
 
       // For admin chats: only include if there's at least one message
-      if (isAdminChat && !lastMessage) return null;
+      if (isAdminChat && !lastMsg) continue;
 
-      const unreadCount = unreadMap.get(otherUser._id.toString()) || 0;
+      const unreadCount = unreadMap.get(otherUserIdStr) || 0;
 
-      return {
+      validResults.push({
         _id: f._id,
         status: f.status,
         createdAt: f.createdAt,
@@ -112,33 +172,21 @@ export async function GET(request: NextRequest) {
           lastSeen: otherUser.lastSeen,
           role: otherUser.role,
         },
-        lastMessage: lastMessage
+        lastMessage: lastMsg
           ? {
-              content: lastMessage.content || (lastMessage.type === 'image' ? '[Photo]' : ''),
-              createdAt: lastMessage.createdAt,
-              type: lastMessage.type,
-              status: lastMessage.status,
-              senderId: lastMessage.sender.toString(),
+              content: lastMsg.content || (lastMsg.type === 'image' ? '[Photo]' : ''),
+              createdAt: lastMsg.createdAt,
+              type: lastMsg.type,
+              status: lastMsg.status,
+              senderId: lastMsg.sender ? lastMsg.sender.toString() : '',
             }
           : null,
         unreadCount,
         isRequester,
-      };
-    }));
-
-    // Remove null entries (admin chats with no messages, or missing users)
-    const validResults = results.filter((r) => r !== null);
-
-    let finalResponse;
-    // For 'friends' type, filter out chats the user has hidden (deleted from their view)
-    if (type === 'friends' && !includeHidden) {
-      const currentUser = await User.findById(payload.userId).select('hiddenChats').lean();
-      const hiddenIds = ((currentUser as any)?.hiddenChats ?? []).map((id: any) => id.toString());
-      const filtered = validResults.filter((r: any) => !hiddenIds.includes(r.otherUser._id.toString()));
-      finalResponse = { friendships: filtered };
-    } else {
-      finalResponse = { friendships: validResults };
+      });
     }
+
+    const finalResponse = { friendships: validResults };
 
     await setCache(cacheKey, finalResponse, 300);
     return NextResponse.json(finalResponse);

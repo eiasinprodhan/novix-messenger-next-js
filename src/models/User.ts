@@ -111,6 +111,7 @@ export interface IUser extends Document {
     profileCategories?: boolean;
     dataSharing?: boolean;
   };
+  e2eePublicKey?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -307,6 +308,7 @@ const UserSchema: Schema<IUser> = new Schema(
       profileCategories: { type: Boolean, default: false },
       dataSharing: { type: Boolean, default: false },
     },
+    e2eePublicKey: { type: String, default: null },
   },
   { timestamps: true }
 );

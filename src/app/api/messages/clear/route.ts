@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Message from '@/models/Message';
 import User from '@/models/User';
 import { getUserFromRequest } from '@/lib/auth';
+import { invalidateFriendsCache, invalidateChatCache } from '@/lib/redis';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +46,25 @@ export async function POST(request: NextRequest) {
       payload.userId,
       { $addToSet: { hiddenChats: friendId } }
     );
+
+    // Invalidate Redis/memory chat cache so future GET requests do not return stale cached messages
+    await invalidateFriendsCache(payload.userId);
+    await invalidateFriendsCache(friendId);
+    await invalidateChatCache(payload.userId, friendId);
+
+    // Broadcast chat_cleared event via socket
+    try {
+      const { getIO } = await import('@/lib/socket');
+      const io = getIO();
+      if (io) {
+        const roomId = [payload.userId, friendId].sort().join('_');
+        io.to(roomId).emit('chat_cleared', {
+          clearedBy: payload.userId,
+          friendId,
+          deleteForEveryone,
+        });
+      }
+    } catch (_) {}
 
     return NextResponse.json({ success: true });
   } catch (error) {

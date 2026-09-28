@@ -214,6 +214,43 @@ export function initSocketServer(server: NetServer) {
       }
     });
 
+    // ACK MESSAGE (WhatsApp-style: recipient confirms delivery -> purge immediately from server DB)
+    socket.on('ack_message', async ({ messageIds }: { messageIds: string[] }) => {
+      const recipientId = socket.data.userId;
+      if (!recipientId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+      try {
+        await connectDB();
+        const Message = (await import('@/models/Message')).default;
+
+        const msgs = await Message.find({
+          _id: { $in: messageIds },
+          receiver: recipientId,
+        }).select('_id sender');
+
+        for (const m of msgs) {
+          const roomId = [recipientId, m.sender.toString()].sort().join('_');
+          io?.to(roomId).emit('message_status', {
+            messageId: m._id.toString(),
+            status: 'delivered',
+            deliveredAt: new Date().toISOString(),
+          });
+          io?.to(`user:${m.sender.toString()}`).emit('message_status', {
+            messageId: m._id.toString(),
+            status: 'delivered',
+            deliveredAt: new Date().toISOString(),
+          });
+        }
+
+        // WhatsApp-style: Delete delivered messages from DB immediately
+        await Message.deleteMany({
+          _id: { $in: messageIds },
+          receiver: recipientId,
+        });
+      } catch (e) {
+        console.error('Error handling ack_message:', e);
+      }
+    });
+
     // TYPING
     socket.on('typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;

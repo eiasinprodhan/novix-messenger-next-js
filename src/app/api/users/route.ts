@@ -35,13 +35,15 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const users = await User.find(searchFilter)
-      .select('-password -verificationCode -verificationCodeExpires')
-      .sort({ lastSeen: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await User.countDocuments(searchFilter);
+    const [users, total] = await Promise.all([
+      User.find(searchFilter)
+        .select('-password -verificationCode -verificationCodeExpires')
+        .sort({ lastSeen: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(searchFilter),
+    ]);
 
     return NextResponse.json({
       users,
