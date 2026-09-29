@@ -4,6 +4,9 @@ import User from '@/models/User';
 import { generateAccessToken, generateRefreshToken } from '@/lib/auth';
 import { sendWelcomeEmail } from '@/lib/mailer';
 import { OAuth2Client } from 'google-auth-library';
+import { getCountryFromRequest } from '@/lib/ipCountry';
+
+const GOOGLE_PROJECT_NUMBER = '342549118730';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -11,7 +14,7 @@ function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-device-id, x-device-name, x-device-type, x-device-os, x-device-browser',
     'Content-Type': 'application/json',
   };
 }
@@ -19,8 +22,6 @@ function corsHeaders() {
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
-
-import { getCountryFromRequest } from '@/lib/ipCountry';
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,17 +47,34 @@ export async function POST(request: NextRequest) {
     let verifiedGoogleId: string | null = null;
     let verifiedPicture: string | null = null;
 
+    // Comprehensive list of all client IDs across Web, iOS, and all Android keystores
     const allowedAudiences = [
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_ANDROID_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_UPLOAD_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_PLAY_CLIENT_ID,
       process.env.GOOGLE_IOS_CLIENT_ID,
-      '342549118730-cas5qac4gl2mf0b6qg2vfqmobe8uuu9g.apps.googleusercontent.com',
-      '342549118730-i4im7pp1maa4vji8ve0p3973lm8gjrk8.apps.googleusercontent.com',
+      '342549118730-cas5qac4gl2mf0b6qg2vfqmobe8uuu9g.apps.googleusercontent.com', // Web Client ID (serverClientId)
+      '342549118730-bhk6chihuvkhltv7fj3t4u388io6uctm.apps.googleusercontent.com', // Android Upload Keystore
+      '342549118730-i4im7pp1maa4vji8ve0p3973lm8gjrk8.apps.googleusercontent.com', // Android Debug Keystore
+      '342549118730-is1hehfod9agq91mah9rj4doddttu52b.apps.googleusercontent.com', // Android Google Play Store Signing
+      '342549118730-pj69d79gb39scjog35bi75v43odda3n0.apps.googleusercontent.com', // Legacy Client ID
     ].filter((id): id is string => Boolean(id && id.trim()));
 
-    // 1. Try verifyIdToken using google-auth-library
+    const isProjectClient = (aud?: string | null, azp?: string | null): boolean => {
+      if (aud && (allowedAudiences.includes(aud) || aud.startsWith(`${GOOGLE_PROJECT_NUMBER}-`))) {
+        return true;
+      }
+      if (azp && (allowedAudiences.includes(azp) || azp.startsWith(`${GOOGLE_PROJECT_NUMBER}-`))) {
+        return true;
+      }
+      return false;
+    };
+
+    // ─── 1. Primary verification: google-auth-library verifyIdToken ────────────
     if (idToken) {
       try {
+        // Attempt strict verification with allowed audiences
         const ticket = await client.verifyIdToken({
           idToken,
           audience: allowedAudiences,
@@ -65,28 +83,45 @@ export async function POST(request: NextRequest) {
         if (payload?.email) {
           verifiedEmail = payload.email.toLowerCase();
           verifiedName = payload.name || null;
-          verifiedGoogleId = payload.sub;
+          verifiedGoogleId = payload.sub || (payload as any).user_id || null;
           verifiedPicture = payload.picture || null;
+          console.log('>>> [GOOGLE-AUTH] Successfully verified via client.verifyIdToken (strict audience)');
         }
       } catch (verifyErr: any) {
-        console.warn('>>> [GOOGLE-AUTH] client.verifyIdToken failed, trying Google tokeninfo endpoint fallback:', verifyErr.message);
+        console.warn('>>> [GOOGLE-AUTH] client.verifyIdToken strict audience failed:', verifyErr.message);
+
+        // Fallback: Verify cryptographic signature first, then check project audience/azp
+        try {
+          const ticketAnyAud = await client.verifyIdToken({ idToken });
+          const payload = ticketAnyAud.getPayload();
+          if (payload?.email && isProjectClient(payload.aud, (payload as any).azp)) {
+            verifiedEmail = payload.email.toLowerCase();
+            verifiedName = payload.name || null;
+            verifiedGoogleId = payload.sub || (payload as any).user_id || null;
+            verifiedPicture = payload.picture || null;
+            console.log('>>> [GOOGLE-AUTH] Successfully verified via client.verifyIdToken (project match)');
+          }
+        } catch (innerErr: any) {
+          console.warn('>>> [GOOGLE-AUTH] client.verifyIdToken project match check failed:', innerErr.message);
+        }
       }
 
-      // 2. Fallback to Google tokeninfo endpoint if verifyIdToken failed
+      // ─── 2. Secondary fallback: Google tokeninfo HTTP endpoint ──────────────
       if (!verifiedEmail) {
         try {
           const tokenInfoRes = await fetch(
             `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
-            { signal: AbortSignal.timeout(5000) }
+            { signal: AbortSignal.timeout(6000) }
           );
           if (tokenInfoRes.ok) {
             const tokenInfo = await tokenInfoRes.json();
-            if (tokenInfo.email && (tokenInfo.email_verified === 'true' || tokenInfo.email_verified === true)) {
+            const isEmailVerified = tokenInfo.email_verified === 'true' || tokenInfo.email_verified === true;
+            if (tokenInfo.email && (isEmailVerified || isProjectClient(tokenInfo.aud, tokenInfo.azp))) {
               verifiedEmail = tokenInfo.email.toLowerCase();
-              verifiedName = tokenInfo.name || null;
-              verifiedGoogleId = tokenInfo.sub;
+              verifiedName = tokenInfo.name || tokenInfo.given_name || null;
+              verifiedGoogleId = tokenInfo.sub || tokenInfo.user_id || null;
               verifiedPicture = tokenInfo.picture || null;
-              console.log('>>> [GOOGLE-AUTH] Token successfully verified via tokeninfo fallback');
+              console.log('>>> [GOOGLE-AUTH] Successfully verified via Google tokeninfo endpoint');
             }
           }
         } catch (tokenInfoErr: any) {
@@ -95,26 +130,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Fallback to Google userinfo using OAuth2 access token if idToken failed or not provided
+    // ─── 3. Tertiary fallback: Google OAuth2 userinfo using googleAccessToken ──
     if (!verifiedEmail && googleAccessToken) {
       try {
         const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { Authorization: `Bearer ${googleAccessToken}` },
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(6000),
         });
         if (userInfoRes.ok) {
           const userInfo = await userInfoRes.json();
           if (userInfo.email) {
             verifiedEmail = userInfo.email.toLowerCase();
             verifiedName = userInfo.name || null;
-            verifiedGoogleId = userInfo.sub;
+            verifiedGoogleId = userInfo.sub || userInfo.id || null;
             verifiedPicture = userInfo.picture || null;
-            console.log('>>> [GOOGLE-AUTH] Verified via Google OAuth userinfo endpoint');
+            console.log('>>> [GOOGLE-AUTH] Successfully verified via Google OAuth userinfo endpoint');
           }
         }
       } catch (userInfoErr: any) {
         console.error('>>> [GOOGLE-AUTH] userinfo verification error:', userInfoErr.message);
       }
+    }
+
+    // If verifiedGoogleId is still missing but email was verified, construct fallback googleId
+    if (verifiedEmail && !verifiedGoogleId) {
+      verifiedGoogleId = `google_${verifiedEmail}`;
     }
 
     if (!verifiedEmail || !verifiedGoogleId) {
@@ -129,25 +169,41 @@ export async function POST(request: NextRequest) {
     const googleId = verifiedGoogleId;
     const picture = verifiedPicture;
 
+    // Sanitize gender to strictly match Mongoose enum
+    const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+    const safeGender = gender && typeof gender === 'string' && validGenders.includes(gender.trim().toLowerCase())
+      ? gender.trim().toLowerCase()
+      : undefined;
+
+    // Sanitize birthday
+    const safeBirthday = birthday && !isNaN(new Date(birthday).getTime()) ? new Date(birthday) : undefined;
+    const safeCountry = country && typeof country === 'string' ? country.trim() : undefined;
+
     // Check if user exists by googleId first
     let user = await User.findOne({ googleId });
     let requiresProfileCompletion = false;
 
     if (!user) {
-      // If not, check if user exists by email
+      // Check if user exists by email
       user = await User.findOne({ email });
 
       if (user) {
-        // Link googleId to existing user
-        user.googleId = googleId;
-        if (!user.avatar && picture) user.avatar = picture;
-        user.isVerified = true;
-        if (gender) (user as any).gender = gender;
-        if (country) (user as any).country = country.trim();
-        if (birthday) (user as any).birthday = new Date(birthday);
-        await user.save({ validateModifiedOnly: true });
+        // Link googleId to existing user safely
+        const updateDoc: any = {
+          googleId,
+          isVerified: true,
+          isOnline: true,
+          lastSeen: new Date(),
+          lastActiveAt: new Date(),
+        };
+        if (!user.avatar && picture) updateDoc.avatar = picture;
+        if (safeGender && !user.gender) updateDoc.gender = safeGender;
+        if (safeCountry && (!user.country || user.country === 'Unknown')) updateDoc.country = safeCountry;
+        if (safeBirthday && !user.birthday) updateDoc.birthday = safeBirthday;
+
+        user = await User.findByIdAndUpdate(user._id, { $set: updateDoc }, { new: true });
       } else {
-        // Create new user with valid, safe username
+        // Create new user with unique username
         const sanitized = (email.split('@')[0] || 'user').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
         let baseUsername = sanitized.length >= 3 ? sanitized.slice(0, 24) : `${sanitized}user`.slice(0, 24);
         if (baseUsername.length < 3) baseUsername = 'user';
@@ -155,7 +211,7 @@ export async function POST(request: NextRequest) {
         let username = baseUsername;
         let suffix = 1;
         while (await User.findOne({ username })) {
-          username = `${baseUsername.slice(0, 22)}${suffix}`.toLowerCase();
+          username = `${baseUsername.slice(0, 20)}${suffix}`.toLowerCase();
           suffix++;
         }
 
@@ -169,9 +225,9 @@ export async function POST(request: NextRequest) {
           isOnline: true,
           lastSeen: new Date(),
           lastActiveAt: new Date(),
-          country: country ? country.trim() : 'United States',
-          ...(gender && { gender }),
-          ...(birthday && { birthday: new Date(birthday) }),
+          country: safeCountry || 'United States',
+          ...(safeGender && { gender: safeGender }),
+          ...(safeBirthday && { birthday: safeBirthday }),
         });
 
         // Send Welcome Email for new Google user (non-blocking)
@@ -187,23 +243,34 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      // User exists, update online status and active time
-      user.isOnline = true;
-      user.lastSeen = new Date();
-      user.lastActiveAt = new Date();
-      if (gender) (user as any).gender = gender;
-      if (country && (!user.country || user.country === 'Unknown')) (user as any).country = country.trim();
-      if (birthday) (user as any).birthday = new Date(birthday);
-      await user.save({ validateModifiedOnly: true });
+      // User exists with googleId, update online status and active time
+      const updateDoc: any = {
+        isOnline: true,
+        lastSeen: new Date(),
+        lastActiveAt: new Date(),
+      };
+      if (picture && (!user.avatar || user.avatar.includes('googleusercontent.com'))) {
+        updateDoc.avatar = picture;
+      }
+      if (safeGender && !user.gender) updateDoc.gender = safeGender;
+      if (safeCountry && (!user.country || user.country === 'Unknown')) updateDoc.country = safeCountry;
+      if (safeBirthday && !user.birthday) updateDoc.birthday = safeBirthday;
+
+      user = await User.findByIdAndUpdate(user._id, { $set: updateDoc }, { new: true });
     }
 
+    if (!user) {
+      return NextResponse.json({ error: 'Failed to authenticate user profile' }, { status: 500, headers: corsHeaders() });
+    }
+
+    // Register/update device activity
     const deviceId = request.headers.get('x-device-id');
     if (deviceId) {
       const { updateDeviceActivity } = await import('@/lib/device');
       await updateDeviceActivity(user._id.toString(), request);
     }
 
-    // Flag if core profile fields are still missing
+    // Check if core profile fields are missing
     const userData = user.toJSON() as any;
     if (!userData.gender || !userData.country || !userData.birthday) {
       requiresProfileCompletion = true;
@@ -225,7 +292,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('>>> [GOOGLE-AUTH] ERROR:', error);
-    return NextResponse.json({ error: 'Google login failed' }, { status: 500, headers: corsHeaders() });
+    return NextResponse.json({ error: 'Google login failed: ' + (error.message || 'Server error') }, { status: 500, headers: corsHeaders() });
   }
 }
+
 
