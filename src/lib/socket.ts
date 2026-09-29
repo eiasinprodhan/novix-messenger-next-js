@@ -259,16 +259,18 @@ export function initSocketServer(server: NetServer) {
     // TYPING
     socket.on('typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;
-      if (!senderId) return;
+      if (!senderId || !receiverId) return;
       const room = [senderId, receiverId].sort().join('_');
       socket.to(room).emit('typing', { userId: senderId, isTyping: true });
+      socket.to(`user:${receiverId}`).emit('typing', { userId: senderId, isTyping: true });
     });
 
     socket.on('stop_typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;
-      if (!senderId) return;
+      if (!senderId || !receiverId) return;
       const room = [senderId, receiverId].sort().join('_');
       socket.to(room).emit('typing', { userId: senderId, isTyping: false });
+      socket.to(`user:${receiverId}`).emit('typing', { userId: senderId, isTyping: false });
     });
 
     // GROUP TYPING
