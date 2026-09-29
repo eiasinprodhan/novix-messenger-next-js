@@ -27,6 +27,11 @@ export function initSocketServer(server: NetServer) {
 
   const io = new SocketIOServer(server, {
     path: '/api/socket',
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
+    pingTimeout: 30000,
+    pingInterval: 25000,
+    connectTimeout: 30000,
     cors: {
       origin: (origin, callback) => {
         // Allow all origins in development to accommodate random local ports

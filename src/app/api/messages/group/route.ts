@@ -259,33 +259,33 @@ export async function POST(request: NextRequest) {
           const offlineMembers = memberIds.filter((id) => !isUserOnline(id));
 
           if (offlineMembers.length > 0) {
-            const memberUsers = await User.find(
+            User.find(
               { _id: { $in: offlineMembers }, fcmToken: { $exists: true, $ne: '' } },
               'fcmToken'
-            ).lean();
-
-            await Promise.allSettled(
-              memberUsers.map((member: any) =>
-                messaging!.send({
-                  token: member.fcmToken,
-                  notification: { title: notifTitle, body: notifBody },
-                  data: {
-                    type: 'group_message',
-                    groupId,
-                    senderId: payload.userId,
-                    senderName,
-                    senderAvatar,
-                  },
-                  android: {
-                    priority: 'high',
-                    notification: {
-                      channelId: 'group_message_channel_id',
-                      icon: '@mipmap/ic_launcher',
+            ).lean().then((memberUsers) => {
+              Promise.allSettled(
+                memberUsers.map((member: any) =>
+                  messaging!.send({
+                    token: member.fcmToken,
+                    notification: { title: notifTitle, body: notifBody },
+                    data: {
+                      type: 'group_message',
+                      groupId,
+                      senderId: payload.userId,
+                      senderName,
+                      senderAvatar,
                     },
-                  },
-                })
-              )
-            );
+                    android: {
+                      priority: 'high',
+                      notification: {
+                        channelId: 'group_message_channel_id',
+                        icon: '@mipmap/ic_launcher',
+                      },
+                    },
+                  })
+                )
+              ).catch(() => {});
+            }).catch(() => {});
           }
         } catch (fcmErr) {
           console.error('[FCM] Group message push error:', fcmErr);
