@@ -27,11 +27,6 @@ export function initSocketServer(server: NetServer) {
 
   const io = new SocketIOServer(server, {
     path: '/api/socket',
-    transports: ['polling', 'websocket'],
-    allowUpgrades: true,
-    pingTimeout: 30000,
-    pingInterval: 25000,
-    connectTimeout: 30000,
     cors: {
       origin: (origin, callback) => {
         // Allow all origins in development to accommodate random local ports
@@ -259,18 +254,16 @@ export function initSocketServer(server: NetServer) {
     // TYPING
     socket.on('typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;
-      if (!senderId || !receiverId) return;
+      if (!senderId) return;
       const room = [senderId, receiverId].sort().join('_');
       socket.to(room).emit('typing', { userId: senderId, isTyping: true });
-      socket.to(`user:${receiverId}`).emit('typing', { userId: senderId, isTyping: true });
     });
 
     socket.on('stop_typing', ({ receiverId }: { receiverId: string }) => {
       const senderId = socket.data.userId;
-      if (!senderId || !receiverId) return;
+      if (!senderId) return;
       const room = [senderId, receiverId].sort().join('_');
       socket.to(room).emit('typing', { userId: senderId, isTyping: false });
-      socket.to(`user:${receiverId}`).emit('typing', { userId: senderId, isTyping: false });
     });
 
     // GROUP TYPING

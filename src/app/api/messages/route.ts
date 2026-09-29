@@ -209,7 +209,6 @@ export async function POST(request: NextRequest) {
 
     // Determine initial status based on online state
     let initialStatus: 'sent' | 'delivered' | 'read' = 'sent';
-    let isReceiverOnline = false;
     if (!isFutureScheduled) {
       try {
         const { isUserOnline } = await import('@/lib/socket');
@@ -217,7 +216,37 @@ export async function POST(request: NextRequest) {
           initialStatus = 'read';
         } else if (isUserOnline(receiverId)) {
           initialStatus = 'delivered';
-          isReceiverOnline = true;
+        } else if (!isSilent) {
+          // Receiver is offline, send FCM push notification
+          const receiverUser = await User.findById(receiverId);
+          if (receiverUser?.fcmToken && messaging) {
+            const senderUser = await User.findById(payload.userId).select('name avatar');
+            try {
+              await messaging.send({
+                token: receiverUser.fcmToken,
+                notification: {
+                  title: senderUser?.name || 'New Message',
+                  body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
+                },
+                data: {
+                  type: 'message',
+                  senderId: payload.userId,
+                  senderName: senderUser?.name || '',
+                  senderAvatar: senderUser?.avatar || '',
+                },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    channelId: 'message_channel_id',
+                    icon: '@mipmap/ic_launcher',
+                  },
+                },
+              });
+              console.log(`[FCM] Push notification sent to ${receiverId}`);
+            } catch (fcmError) {
+              console.error('[FCM] Failed to send push notification:', fcmError);
+            }
+          }
         }
       } catch (e) {}
     }
@@ -249,56 +278,31 @@ export async function POST(request: NextRequest) {
     const populated = await message.populate('sender', 'name username avatar');
 
     if (!isFutureScheduled) {
-      // 1. Emit real-time event via socket IMMEDIATELY
+      // Unhide chat for both users on new message
+      await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
+      await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
+
+      await invalidateFriendsCache(payload.userId);
+      await invalidateFriendsCache(receiverId);
+      await invalidateChatCache(payload.userId, receiverId);
+
+      // Emit real-time event via socket
       try {
         const { getIO } = await import('@/lib/socket');
         const io = getIO();
         if (io) {
           const roomId = [payload.userId, receiverId].sort().join('_');
-          const msgObj = populated.toObject();
           io.to(roomId).emit('new_message', {
-            message: msgObj,
+            message: populated.toObject(),
             from: payload.userId,
           });
           io.to(`user:${receiverId}`).emit('new_message', {
-            message: msgObj,
+            message: populated.toObject(),
             from: payload.userId,
           });
         }
-      } catch (e) {}
-
-      // 2. Non-blocking background tasks (cache invalidations + FCM push)
-      Promise.all([
-        User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } }),
-        User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } }),
-        invalidateFriendsCache(payload.userId),
-        invalidateFriendsCache(receiverId),
-        invalidateChatCache(payload.userId, receiverId),
-      ]).catch(() => {});
-
-      if (!isReceiverOnline && !isSilent && receiverUserObj?.fcmToken && messaging) {
-        const senderName = (populated as any).sender?.name || 'New Message';
-        const senderAvatar = (populated as any).sender?.avatar || '';
-        messaging.send({
-          token: receiverUserObj.fcmToken,
-          notification: {
-            title: senderName,
-            body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
-          },
-          data: {
-            type: 'message',
-            senderId: payload.userId,
-            senderName,
-            senderAvatar,
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              channelId: 'message_channel_id',
-              icon: '@mipmap/ic_launcher',
-            },
-          },
-        }).catch((err) => console.error('[FCM] Background push error:', err));
+      } catch (e) {
+        // Socket not initialized yet - fine for REST fallback
       }
 
       // ── Automated Business Auto-Reply (Greeting & Away Messages) ──
