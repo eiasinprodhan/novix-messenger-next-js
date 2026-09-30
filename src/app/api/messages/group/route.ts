@@ -4,7 +4,7 @@ import Message from '@/models/Message';
 import Group from '@/models/Group';
 import User from '@/models/User';
 import { getUserFromRequest } from '@/lib/auth';
-import { messaging } from '@/lib/firebase-admin';
+import { messaging, formatNotificationPreview } from '@/lib/firebase-admin';
 import { isUserOnline } from '@/lib/socket';
 
 // GET group messages
@@ -246,11 +246,8 @@ export async function POST(request: NextRequest) {
           const senderName = senderUser?.name || 'Someone';
           const senderAvatar = senderUser?.avatar || '';
           const notifTitle = group.name as string;
-          const notifBody = type === 'image'
-            ? `${senderName}: 📷 Image`
-            : type === 'audio'
-            ? `${senderName}: 🎵 Voice message`
-            : `${senderName}: ${content || ''}`;
+          const previewText = formatNotificationPreview(content, type);
+          const notifBody = `${senderName}: ${previewText}`;
 
           const memberIds: string[] = group.members
             .map((m: any) => (m.user?._id || m.user || m)?.toString())
@@ -271,10 +268,12 @@ export async function POST(request: NextRequest) {
                   notification: { title: notifTitle, body: notifBody },
                   data: {
                     type: 'group_message',
+                    messageType: type || 'text',
                     groupId,
                     senderId: payload.userId,
                     senderName,
                     senderAvatar,
+                    body: notifBody,
                   },
                   android: {
                     priority: 'high',

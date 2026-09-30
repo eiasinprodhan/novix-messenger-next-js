@@ -174,7 +174,12 @@ export async function GET(request: NextRequest) {
         },
         lastMessage: lastMsg
           ? {
-              content: lastMsg.content || (lastMsg.type === 'image' ? '[Photo]' : ''),
+              content: lastMsg.content || (
+                lastMsg.type === 'image' ? '[Photo]' :
+                (lastMsg.type === 'audio' || lastMsg.type === 'voice') ? '[Voice message]' :
+                lastMsg.type === 'video' ? '[Video]' :
+                lastMsg.type === 'document' ? '[Document]' : ''
+              ),
               createdAt: lastMsg.createdAt,
               type: lastMsg.type,
               status: lastMsg.status,

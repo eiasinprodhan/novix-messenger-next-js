@@ -4,8 +4,7 @@ import Message from '@/models/Message';
 import Friendship from '@/models/Friendship';
 import { getUserFromRequest } from '@/lib/auth';
 import User from '@/models/User';
-import Product from '@/models/Product';
-import { messaging } from '@/lib/firebase-admin';
+import { messaging, formatNotificationPreview } from '@/lib/firebase-admin';
 import { getCache, setCache, invalidateFriendsCache, invalidateChatCache } from '@/lib/redis';
 
 export async function GET(request: NextRequest) {
@@ -221,18 +220,21 @@ export async function POST(request: NextRequest) {
           const receiverUser = await User.findById(receiverId);
           if (receiverUser?.fcmToken && messaging) {
             const senderUser = await User.findById(payload.userId).select('name avatar');
+            const notifBody = formatNotificationPreview(content, type, !!encryptedPayload);
             try {
               await messaging.send({
                 token: receiverUser.fcmToken,
                 notification: {
                   title: senderUser?.name || 'New Message',
-                  body: type === 'image' ? '📷 Image' : type === 'audio' ? '🎵 Voice message' : type === 'poll' ? '📊 Poll' : (content || ''),
+                  body: notifBody,
                 },
                 data: {
                   type: 'message',
+                  messageType: type || 'text',
                   senderId: payload.userId,
                   senderName: senderUser?.name || '',
                   senderAvatar: senderUser?.avatar || '',
+                  body: notifBody,
                 },
                 android: {
                   priority: 'high',
