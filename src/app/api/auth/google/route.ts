@@ -37,9 +37,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Auto-detect country via IP if not explicitly provided
-    if (!country || typeof country !== 'string' || !country.trim()) {
-      country = await getCountryFromRequest(request);
+    // Fast synchronous check for country from input or Cloudflare header (0ms overhead)
+    let safeCountry: string | undefined = country && typeof country === 'string' && country.trim() ? country.trim() : undefined;
+    if (!safeCountry) {
+      const cfCountry = request.headers.get('cf-ipcountry');
+      if (cfCountry && cfCountry.length === 2 && cfCountry !== 'XX') {
+        const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+        safeCountry = regionNames.of(cfCountry.toUpperCase()) || undefined;
+      }
     }
 
     let verifiedEmail: string | null = null;
@@ -57,7 +62,8 @@ export async function POST(request: NextRequest) {
       '342549118730-cas5qac4gl2mf0b6qg2vfqmobe8uuu9g.apps.googleusercontent.com', // Web Client ID (serverClientId)
       '342549118730-bhk6chihuvkhltv7fj3t4u388io6uctm.apps.googleusercontent.com', // Android Upload Keystore
       '342549118730-i4im7pp1maa4vji8ve0p3973lm8gjrk8.apps.googleusercontent.com', // Android Debug Keystore
-      '342549118730-is1hehfod9agq91mah9rj4doddttu52b.apps.googleusercontent.com', // Android Google Play Store Signing
+      '342549118730-el3sn8cqufrueerfihk6huu0mido0gt3.apps.googleusercontent.com', // Android Google Play Store Signing
+      '342549118730-is1hehfod9agq91mah9rj4doddttu52b.apps.googleusercontent.com', // Previous Play Client ID
       '342549118730-pj69d79gb39scjog35bi75v43odda3n0.apps.googleusercontent.com', // Legacy Client ID
     ].filter((id): id is string => Boolean(id && id.trim()));
 
@@ -170,17 +176,17 @@ export async function POST(request: NextRequest) {
     const picture = verifiedPicture;
 
     // Sanitize gender to strictly match Mongoose enum
-    const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
-    const safeGender = gender && typeof gender === 'string' && validGenders.includes(gender.trim().toLowerCase())
-      ? gender.trim().toLowerCase()
+    const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'] as const;
+    type GenderType = typeof validGenders[number];
+    const safeGender: GenderType | undefined = gender && typeof gender === 'string' && (validGenders as readonly string[]).includes(gender.trim().toLowerCase())
+      ? (gender.trim().toLowerCase() as GenderType)
       : undefined;
 
     // Sanitize birthday
     const safeBirthday = birthday && !isNaN(new Date(birthday).getTime()) ? new Date(birthday) : undefined;
-    const safeCountry = country && typeof country === 'string' ? country.trim() : undefined;
 
     // Check if user exists by googleId first
-    let user = await User.findOne({ googleId });
+    let user: any = await User.findOne({ googleId });
     let requiresProfileCompletion = false;
 
     if (!user) {
@@ -213,6 +219,10 @@ export async function POST(request: NextRequest) {
         while (await User.findOne({ username })) {
           username = `${baseUsername.slice(0, 20)}${suffix}`.toLowerCase();
           suffix++;
+        }
+
+        if (!safeCountry) {
+          safeCountry = await getCountryFromRequest(request);
         }
 
         user = await User.create({
@@ -263,11 +273,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to authenticate user profile' }, { status: 500, headers: corsHeaders() });
     }
 
-    // Register/update device activity
+    // Register/update device activity in background
     const deviceId = request.headers.get('x-device-id');
     if (deviceId) {
-      const { updateDeviceActivity } = await import('@/lib/device');
-      await updateDeviceActivity(user._id.toString(), request);
+      import('@/lib/device').then(({ updateDeviceActivity }) => {
+        updateDeviceActivity(user._id.toString(), request).catch(() => {});
+      }).catch(() => {});
     }
 
     // Check if core profile fields are missing

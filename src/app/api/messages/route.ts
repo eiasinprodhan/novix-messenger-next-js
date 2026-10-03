@@ -25,36 +25,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'friendId is required' }, { status: 400 });
     }
 
-    // Check if either user is an admin
-    const currentUserObj = await User.findById(payload.userId).select('role');
-    const targetUserObj = await User.findById(friendId).select('role');
+    // Parallelize user role checks and read status updates
+    const [currentUserObj, targetUserObj] = await Promise.all([
+      User.findById(payload.userId).select('role').lean(),
+      User.findById(friendId).select('role').lean(),
+    ]);
     const isAdminInvolved = currentUserObj?.role === 'admin' || targetUserObj?.role === 'admin';
-
     const isSelfSavedMessages = friendId === payload.userId;
 
-    if (!isAdminInvolved && !isSelfSavedMessages) {
-      const friendship = await Friendship.findOne({
-        $or: [
-          { requester: payload.userId, recipient: friendId },
-          { requester: friendId, recipient: payload.userId },
-        ],
-      });
+    const [friendship, updateResult] = await Promise.all([
+      (!isAdminInvolved && !isSelfSavedMessages)
+        ? Friendship.findOne({
+            $or: [
+              { requester: payload.userId, recipient: friendId },
+              { requester: friendId, recipient: payload.userId },
+            ],
+          }).lean()
+        : Promise.resolve(null),
+      Message.updateMany(
+        { sender: friendId, receiver: payload.userId, status: { $ne: 'read' } },
+        { status: 'read' }
+      ),
+    ]);
 
-      if (friendship?.status === 'blocked') {
-        return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
-      }
+    if (friendship?.status === 'blocked') {
+      return NextResponse.json({ error: 'Cannot chat with this user' }, { status: 403 });
     }
 
-    // Mark messages sent by friendId to current user as 'read'
-    const updateResult = await Message.updateMany(
-      { sender: friendId, receiver: payload.userId, status: { $ne: 'read' } },
-      { status: 'read' }
-    );
-
     if (updateResult.modifiedCount > 0) {
-      await invalidateFriendsCache(payload.userId);
-      await invalidateFriendsCache(friendId);
-      await invalidateChatCache(payload.userId, friendId);
+      await Promise.all([
+        invalidateFriendsCache(payload.userId),
+        invalidateFriendsCache(friendId),
+        invalidateChatCache(payload.userId, friendId),
+      ]);
     }
 
     const sortedIds = [payload.userId, friendId].sort().join('_');
@@ -172,9 +175,11 @@ export async function POST(request: NextRequest) {
     const isSelfSavedMessages = receiverId === payload.userId;
     const isFutureScheduled = scheduledFor && new Date(scheduledFor).getTime() > Date.now();
 
-    // Check if either user is an admin
-    const senderUserObj = await User.findById(payload.userId).select('role');
-    const receiverUserObj = await User.findById(receiverId).select('role businessSettings fcmToken name avatar isPremium');
+    // Parallelize user lookups
+    const [senderUserObj, receiverUserObj] = await Promise.all([
+      User.findById(payload.userId).select('role').lean(),
+      User.findById(receiverId).select('role businessSettings fcmToken name avatar isPremium').lean(),
+    ]);
     const isAdminInvolved = senderUserObj?.role === 'admin' || receiverUserObj?.role === 'admin';
 
     if (!isAdminInvolved && !isSelfSavedMessages) {
@@ -196,13 +201,17 @@ export async function POST(request: NextRequest) {
           recipient: receiverId,
           status: 'accepted',
         });
-        await invalidateFriendsCache(payload.userId);
-        await invalidateFriendsCache(receiverId);
+        await Promise.all([
+          invalidateFriendsCache(payload.userId),
+          invalidateFriendsCache(receiverId),
+        ]);
       } else if (friendship.status !== 'accepted') {
         friendship.status = 'accepted';
         await friendship.save();
-        await invalidateFriendsCache(payload.userId);
-        await invalidateFriendsCache(receiverId);
+        await Promise.all([
+          invalidateFriendsCache(payload.userId),
+          invalidateFriendsCache(receiverId),
+        ]);
       }
     }
 
@@ -280,13 +289,14 @@ export async function POST(request: NextRequest) {
     const populated = await message.populate('sender', 'name username avatar');
 
     if (!isFutureScheduled) {
-      // Unhide chat for both users on new message
-      await User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } });
-      await User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } });
-
-      await invalidateFriendsCache(payload.userId);
-      await invalidateFriendsCache(receiverId);
-      await invalidateChatCache(payload.userId, receiverId);
+      // Unhide chat for both users and invalidate cache in parallel
+      await Promise.all([
+        User.findByIdAndUpdate(payload.userId, { $pull: { hiddenChats: receiverId } }),
+        User.findByIdAndUpdate(receiverId, { $pull: { hiddenChats: payload.userId } }),
+        invalidateFriendsCache(payload.userId),
+        invalidateFriendsCache(receiverId),
+        invalidateChatCache(payload.userId, receiverId),
+      ]);
 
       // Emit real-time event via socket
       try {
